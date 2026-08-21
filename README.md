@@ -3,7 +3,7 @@
 ボムを置いて壁を壊し、爆風で相手を吹き飛ばす、最大4人の対戦アクションです。
 ブラウザで開くだけで遊べます。インストール不要・アカウント不要。
 
-**遊ぶ → https://bomb-blast-arena.vercel.app/**
+**遊ぶ → https://voraz-robot-battle.vercel.app/**
 
 （予備URL: https://yanoken10.github.io/bomb-blast-arena/ ）
 
