@@ -381,6 +381,13 @@
     background:var(--panel-2);border:2px solid var(--edge);color:var(--ink);
   }
   .pick.sel{border-color:var(--accent);background:#fff;color:var(--accent)}
+  .parttab{
+    font-family:var(--jp);font-size:12px;padding:4px 8px;cursor:pointer;
+    background:var(--panel-2);border:2px solid var(--edge);color:var(--ink);
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .parttab.sel{border-color:var(--accent);background:#fff;color:var(--accent)}
+  .parttab .chip{width:14px;height:14px;border:1px solid rgba(30,45,65,.35);display:inline-block}
   .mark{width:42px;height:42px;border:3px solid var(--edge);background:#fff;padding:0;cursor:pointer;display:grid;place-items:center}
   .mark canvas{width:28px;height:28px;image-rendering:pixelated}
   .mark.sel{border-color:var(--accent);background:var(--panel-2)}
@@ -785,11 +792,25 @@ function newField(){
 }
 
 var SLOT_COLORS=[56,1,26,16];
+var PART_KEYS=["face","body","arms","legs","eyes"];
+var PART_LABELS={face:"かお",body:"からだ",arms:"うで",legs:"あし",eyes:"め"};
+var EYE_DEFAULT=90;
+function palOf(i){ return BODY_COLORS[Math.max(0,Math.min(BODY_COLORS.length-1,i|0))]; }
+function palsFromLook(lk){
+  return {
+    face:palOf(lk.face), body:palOf(lk.body), arms:palOf(lk.arms),
+    legs:palOf(lk.legs), eyes:palOf(lk.eyes)
+  };
+}
+function uniformCols(pal,eyeIdx){
+  var e=palOf(eyeIdx==null?EYE_DEFAULT:eyeIdx);
+  return {face:pal,body:pal,arms:pal,legs:pal,eyes:e};
+}
 function makePlayer(slot,isAI,label){
   var pal=BODY_COLORS[SLOT_COLORS[slot%SLOT_COLORS.length]];
   var sp=SPAWNS[slot];
   return {
-    id:slot, pal:pal, isAI:isAI, label:label,
+    id:slot, pal:pal, cols:uniformCols(pal), isAI:isAI, label:label,
     x:sp[0]*T+T/2, y:sp[1]*T+T/2, dir:slot===1||slot===3?"up":"down",
     speed:BASE_SPEED, fire:1, maxBombs:1, kick:false, pierce:false, remote:false,
     traps:0, pig:false, invul:0, hop:null, bump:0,
@@ -828,7 +849,8 @@ function startMatch(mode,stage){
     G.players.push(makePlayer(i,!human, human?("P"+(i+1)):("CPU"+(i+1-mode.humans))));
   }
   var lk=currentLook(), p0=G.players[0];
-  p0.pal=BODY_COLORS[Math.max(0,Math.min(BODY_COLORS.length-1,lk.color|0))];
+  p0.cols=palsFromLook(lk);
+  p0.pal=p0.cols.face;
   if(ACC.profile) p0.label=ACC.profile.name||"P1";
   var used={}; used[p0.pal.key]=1;
   for(var q=1;q<G.players.length;q++){
@@ -839,6 +861,7 @@ function startMatch(mode,stage){
       }
     }
     used[pq.pal.key]=1;
+    pq.cols=uniformCols(pq.pal);
   }
   buildCards();
   hideOverlay();
@@ -1794,42 +1817,46 @@ function drawPig(x,y,p,step){
   ctx.fillStyle=dark; ctx.fillRect(x-s*8,y-7,1,2); ctx.fillRect(x-s*9,y-8,1,2);
 }
 var VISOR="#141230";
-/* helmet + visor character, drawn from the chosen colour */
-function drawCharHead(g,x,top,pal,dir){
-  g.fillStyle=pal.trim; g.fillRect(x-5,top,10,8);
-  g.fillStyle=pal.body; g.fillRect(x-4,top+1,8,6);
-  g.fillStyle=pal.light; g.fillRect(x-4,top+1,3,2);
+/* helmet + visor character; every part takes its own colour */
+function drawCharHead(g,x,top,C,dir){
+  var face=C.face;
+  g.fillStyle=face.trim; g.fillRect(x-5,top,10,8);
+  g.fillStyle=face.body; g.fillRect(x-4,top+1,8,6);
+  g.fillStyle=face.light; g.fillRect(x-4,top+1,3,2);
   if(dir==="up"){
-    g.fillStyle=pal.dark; g.fillRect(x-3,top+3,6,3);
+    g.fillStyle=face.dark; g.fillRect(x-3,top+3,6,3);
   } else if(dir==="down"){
     g.fillStyle=VISOR; g.fillRect(x-3,top+3,6,3);
-    g.fillStyle=pal.light; g.fillRect(x-2,top+4,1,1); g.fillRect(x+1,top+4,1,1);
+    g.fillStyle=C.eyes.body; g.fillRect(x-3,top+4,2,1); g.fillRect(x+1,top+4,2,1);
   } else {
     var s=dir==="right"?1:-1;
     g.fillStyle=VISOR; g.fillRect(x-1+(s>0?1:-3),top+3,4,3);
-    g.fillStyle=pal.light; g.fillRect(x+(s>0?2:-2),top+4,1,1);
+    g.fillStyle=C.eyes.body; g.fillRect(x+(s>0?1:-2),top+4,2,1);
   }
 }
-function drawChar(g,x,y,pal,dir,step){
+function drawChar(g,x,y,C,dir,step){
   var top=y-14;
   var la=step===1?1:0, lb=step===3?1:0;
   /* legs */
-  g.fillStyle=pal.trim;
+  g.fillStyle=C.legs.trim;
   g.fillRect(x-4,top+13-la,3,4+la);
   g.fillRect(x+1,top+13-lb,3,4+lb);
+  g.fillStyle=C.legs.body;
+  g.fillRect(x-4,top+13-la,3,2+la);
+  g.fillRect(x+1,top+13-lb,3,2+lb);
   /* body */
-  g.fillStyle=pal.dark; g.fillRect(x-5,top+7,10,7);
-  g.fillStyle=pal.body; g.fillRect(x-4,top+8,8,5);
-  g.fillStyle=pal.light; g.fillRect(x-2,top+9,4,3);
+  g.fillStyle=C.body.dark; g.fillRect(x-5,top+7,10,7);
+  g.fillStyle=C.body.body; g.fillRect(x-4,top+8,8,5);
+  g.fillStyle=C.body.light; g.fillRect(x-2,top+9,4,3);
   /* arms */
-  g.fillStyle=pal.dark;
-  g.fillRect(x-6,top+8,2,4); g.fillRect(x+4,top+8,2,4);
+  g.fillStyle=C.arms.dark; g.fillRect(x-6,top+8,2,4); g.fillRect(x+4,top+8,2,4);
+  g.fillStyle=C.arms.body; g.fillRect(x-6,top+9,2,2); g.fillRect(x+4,top+9,2,2);
   /* helmet */
-  drawCharHead(g,x,top,pal,dir);
+  drawCharHead(g,x,top,C,dir);
 }
-function drawPortrait(g,ox,oy,pal){
+function drawPortrait(g,ox,oy,C){
   g.clearRect(0,0,16,16);
-  drawCharHead(g,ox+8,oy+4,pal,"down");
+  drawCharHead(g,ox+8,oy+4,C,"down");
 }
 function drawFighter(p){
   var x=Math.round(p.x), y=Math.round(p.y);
@@ -1849,7 +1876,7 @@ function drawFighter(p){
   ctx.fillStyle="rgba(0,0,0,"+(arc?0.18:0.34)+")";
   ctx.fillRect(x-5-(arc?1:0),y+2,10+(arc?2:0),3);
   if(p.pig&&p.alive) drawPig(x,y-arc,p,step);
-  drawChar(ctx,x,oy,p.pal,p.dir,step);
+  drawChar(ctx,x,oy,p.cols||uniformCols(p.pal),p.dir,step);
   ctx.globalAlpha=1;
 }
 function drawFlameCell(cell,f){
@@ -1967,7 +1994,7 @@ function buildCards(){
     var pips=el.querySelector(".pips");
     for(var k=0;k<WINS_NEEDED;k++){ var s=document.createElement("span"); s.className="pip"; pips.appendChild(s); }
     var embCv=el.querySelector(".emb");
-    if(embCv) drawPortrait(embCv.getContext("2d"),0,0,p.pal);
+    if(embCv) drawPortrait(embCv.getContext("2d"),0,0,p.cols||uniformCols(p.pal));
     cardsEl.appendChild(el);
     cardRefs.push({el:el,pips:pips,stats:el.querySelectorAll(".stats u"),badges:el.querySelector(".badges")});
   }
@@ -2217,15 +2244,25 @@ function frame(ts){
 /* ============ account ============ */
 var API=/github\.io$/i.test(location.hostname)?"https://bomb-blast-arena.vercel.app":"";
 var ACC={token:"",profile:null,busy:false};
-var LOOK={color:56,accent:1,eyes:0,hat:0};
+var LOOK={face:56,body:56,arms:56,legs:56,eyes:EYE_DEFAULT};
+function normLook(src,fallbackColor){
+  var base=(fallbackColor==null?56:fallbackColor|0);
+  var out={};
+  for(var i=0;i<PART_KEYS.length;i++){
+    var k=PART_KEYS[i];
+    var v=(src&&src[k]!=null)?src[k]|0:(k==="eyes"?EYE_DEFAULT:base);
+    out[k]=Math.max(0,Math.min(BODY_COLORS.length-1,v));
+  }
+  return out;
+}
 try{
   ACC.token=localStorage.getItem("bba_token")||"";
   var savedLook=JSON.parse(localStorage.getItem("bba_look")||"null");
-  if(savedLook) LOOK={color:savedLook.color|0,accent:savedLook.accent|0,eyes:savedLook.eyes|0,hat:savedLook.hat|0};
+  if(savedLook) LOOK=normLook(savedLook.parts||savedLook,savedLook.color);
 }catch(e){}
 function currentLook(){
   var p=ACC.profile;
-  if(p) return {color:p.color|0,accent:p.accent|0,eyes:p.eyes|0,hat:p.hat|0};
+  if(p) return normLook(p.parts,p.color);
   return LOOK;
 }
 var modalEl=document.getElementById("modal");
@@ -2314,14 +2351,20 @@ function openMaker(){
   var p=ACC.profile;
   var lk=currentLook();
   var guest=!p;
-  if(guest) p={id:"",name:"",color:lk.color,accent:lk.accent,eyes:lk.eyes,hat:lk.hat,stats:null};
+  if(guest) p={id:"",name:"",stats:null};
   modalEl.hidden=false;
   var sw="";
   for(var i=0;i<BODY_COLORS.length;i++){
-    sw+='<button class="swatch'+(i===(p.color|0)?" sel":"")+'" data-color="'+i+'" type="button" '+
+    sw+='<button class="swatch" data-color="'+i+'" type="button" '+
       'style="background:'+BODY_COLORS[i].body+'" title="'+BODY_COLORS[i].name+'" aria-label="'+BODY_COLORS[i].name+'"></button>';
   }
-  sw='<div class="palette">'+sw+'</div>';
+  sw='<div class="palette" id="pfPalette">'+sw+'</div>';
+  var tabs="";
+  for(var t=0;t<PART_KEYS.length;t++){
+    var k=PART_KEYS[t];
+    tabs+='<button class="parttab'+(t===0?" sel":"")+'" data-part="'+k+'" type="button">'+
+      '<span class="chip" style="background:'+palOf(lk[k]).body+'"></span>'+PART_LABELS[k]+'</button>';
+  }
   var st=p.stats||{};
   sheetEl.innerHTML=
     '<h2>キャラメイク</h2>'+
@@ -2333,11 +2376,13 @@ function openMaker(){
     (guest ? '' :
       '<div class="field"><label for="pfName">なまえ（12文字まで）</label>'+
       '<input id="pfName" type="text" maxlength="12" value="'+String(p.name||"").replace(/"/g,"&quot;")+'"></div>')+
-    '<div class="field"><label>キャラの いろ　<b id="pfColName">'+
-      String((BODY_COLORS[p.color|0]||BODY_COLORS[0]).name)+'</b></label>'+sw+
-      '<div class="row2"><button class="btn ghost" id="pfRand" type="button">ランダム</button>'+
-      '<span class="hint">'+BODY_COLORS.length+'色から えらべます</span></div></div>'+
+    '<div class="field"><label>いろを かえる パーツ</label><div class="picks">'+tabs+'</div></div>'+
     '</div></div>'+
+    '<div class="field"><label><b id="pfPartName">かお</b> の いろ　<b id="pfColName">'+
+      palOf(lk.face).name+'</b></label>'+sw+
+      '<div class="row2"><button class="btn ghost" id="pfRand" type="button">ランダム</button>'+
+      '<button class="btn ghost" id="pfAll" type="button">ぜんぶ同じ色</button>'+
+      '<span class="hint">'+BODY_COLORS.length+'色</span></div></div>'+
     (guest ? '' :
       '<div class="statgrid">'+
       '<div><span>あそんだ回数</span><b>'+(st.matches|0)+'</b></div>'+
@@ -2350,14 +2395,15 @@ function openMaker(){
     (guest
       ? '<button class="btn ghost" id="pfIn" type="button">ログイン / とうろく（メール不要）</button>'
       : '<button class="btn ghost" id="pfOut" type="button">この端末からログアウト</button>');
-  var pick={color:p.color|0,accent:p.accent|0,eyes:p.eyes|0,hat:p.hat|0};
+  var pick=normLook(lk);
+  var part="face";
   var prev=document.getElementById("pfPrev"), pctx=prev.getContext("2d");
   pctx.imageSmoothingEnabled=false;
   var prevDir="down", prevStep=0;
   function drawPreview(){
     pctx.clearRect(0,0,prev.width,prev.height);
     pctx.save(); pctx.scale(6,6);
-    drawChar(pctx,11,21,BODY_COLORS[pick.color]||BODY_COLORS[0],prevDir,prevStep);
+    drawChar(pctx,11,21,palsFromLook(pick),prevDir,prevStep);
     pctx.restore();
   }
   var prevTimer=setInterval(function(){
@@ -2366,31 +2412,50 @@ function openMaker(){
     if(prevStep===0) prevDir=["down","left","up","right"][(Math.random()*4)|0];
     drawPreview();
   },420);
-  var nameEl=document.getElementById("pfColName");
-  function selectColor(idx,scroll){
-    pick.color=Math.max(0,Math.min(BODY_COLORS.length-1,idx));
+  var nameEl=document.getElementById("pfColName"), partNameEl=document.getElementById("pfPartName");
+  function refreshPalette(scroll){
     sheetEl.querySelectorAll("[data-color]").forEach(function(o){ o.classList.remove("sel"); });
-    var b=sheetEl.querySelector('[data-color="'+pick.color+'"]');
+    var b=sheetEl.querySelector('[data-color="'+pick[part]+'"]');
     if(b){ b.classList.add("sel"); if(scroll&&b.scrollIntoView) b.scrollIntoView({block:"nearest"}); }
-    if(nameEl) nameEl.textContent=BODY_COLORS[pick.color].name;
+    sheetEl.querySelectorAll("[data-part]").forEach(function(o){
+      var k=o.getAttribute("data-part");
+      o.classList.toggle("sel",k===part);
+      var chip=o.querySelector(".chip");
+      if(chip) chip.style.background=palOf(pick[k]).body;
+    });
+    if(nameEl) nameEl.textContent=palOf(pick[part]).name;
+    if(partNameEl) partNameEl.textContent=PART_LABELS[part];
     drawPreview();
+  }
+  function selectColor(idx,scroll){
+    pick[part]=Math.max(0,Math.min(BODY_COLORS.length-1,idx));
+    refreshPalette(scroll);
   }
   sheetEl.querySelectorAll("[data-color]").forEach(function(b){
     b.onclick=function(){ selectColor(+b.getAttribute("data-color"),false); };
   });
+  sheetEl.querySelectorAll("[data-part]").forEach(function(b){
+    b.onclick=function(){ part=b.getAttribute("data-part"); refreshPalette(true); };
+  });
   var randBtn=document.getElementById("pfRand");
   if(randBtn) randBtn.onclick=function(){ selectColor((Math.random()*BODY_COLORS.length)|0,true); };
-  drawPreview();
+  var allBtn=document.getElementById("pfAll");
+  if(allBtn) allBtn.onclick=function(){
+    var c=pick[part];
+    for(var i=0;i<PART_KEYS.length;i++){ if(PART_KEYS[i]!=="eyes") pick[PART_KEYS[i]]=c; }
+    refreshPalette(false);
+  };
+  refreshPalette(true);
   var err=document.getElementById("pfErr");
   document.getElementById("pfSave").onclick=function(){
-    LOOK={color:pick.color,accent:pick.accent,eyes:pick.eyes,hat:pick.hat};
-    try{ localStorage.setItem("bba_look",JSON.stringify(LOOK)); }catch(e3){}
+    LOOK=normLook(pick);
+    try{ localStorage.setItem("bba_look",JSON.stringify({parts:LOOK})); }catch(e3){}
     if(guest){ SFX.item(); closeModal(); refreshAccount(); return; }
     if(ACC.busy) return;
     ACC.busy=true; err.textContent="ほぞん中…";
     api("/api/profile",{method:"POST",body:{profile:{
-      name:document.getElementById("pfName").value,color:pick.color,
-      accent:pick.accent,eyes:pick.eyes,hat:pick.hat
+      name:document.getElementById("pfName").value,
+      color:pick.face, parts:LOOK
     }}}).then(function(j){
       ACC.busy=false; ACC.profile=j.profile; SFX.item(); closeModal(); refreshAccount();
     }).catch(function(e2){

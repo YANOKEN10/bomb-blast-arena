@@ -91,11 +91,22 @@ function bearer(req) {
 
 /* --- shapes --- */
 const EMPTY_STATS = { matches: 0, matchWins: 0, rounds: 0, roundWins: 0 };
+const PART_KEYS = ["face", "body", "arms", "legs", "eyes"];
+function cleanParts(src, fallback) {
+  if (src === null || typeof src !== "object") return null;
+  const out = {};
+  for (const k of PART_KEYS) {
+    const v = src[k] == null ? fallback : src[k] | 0;
+    out[k] = Math.max(0, Math.min(199, v | 0));
+  }
+  return out;
+}
 function publicUser(u) {
   return {
     id: u.id,
     name: u.name,
     color: u.color | 0,
+    parts: u.parts || null,
     accent: u.accent | 0,
     eyes: u.eyes | 0,
     hat: u.hat | 0,
@@ -112,5 +123,5 @@ function cleanName(n, fallback) {
 
 module.exports = {
   cors, body, normId, readUser, writeUser, hashPw, checkPw,
-  makeToken, readToken, bearer, publicUser, cleanName, EMPTY_STATS
+  makeToken, readToken, bearer, publicUser, cleanName, cleanParts, EMPTY_STATS
 };
