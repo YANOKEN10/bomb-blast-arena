@@ -8,6 +8,16 @@ const PORT = 5177;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png" };
 
 http.createServer((req, res) => {
+  if (req.method === "POST" && req.url.startsWith("/snap")) {
+    let body = "";
+    req.on("data", (c) => { body += c; });
+    req.on("end", () => {
+      const name = (new URL(req.url, "http://x").searchParams.get("n") || "snap") + ".png";
+      fs.writeFileSync(path.join(ROOT, name), Buffer.from(body.replace(/^data:image\/png;base64,/, ""), "base64"));
+      res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+    });
+    return;
+  }
   let rel = decodeURIComponent(req.url.split("?")[0]);
   if (rel === "/") rel = "/index.html";
   const file = path.join(ROOT, path.normalize(rel).replace(/^([/\\])+/, ""));
