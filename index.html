@@ -53,7 +53,10 @@
     min-height:100vh;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:780px;margin:0 auto;padding:18px 16px 16px;display:flex;flex-direction:column;gap:14px}
+  .wrap{
+    max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+    padding:18px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  }
 
   .marquee{text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
   .logo{
@@ -123,10 +126,12 @@
   body:not(.touch) .stage{grid-template-columns:1fr;grid-template-areas:"hud" "screen" "info"}
   body.wide .stage{
     width:auto;gap:8px clamp(8px,2vw,20px);
-    grid-template-columns:auto auto auto;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
     grid-template-areas:"hud hud hud" "dpad screen acts";
     align-items:center;justify-content:center;
   }
+  body.wide .dpad{justify-self:center}
+  body.wide .acts{justify-self:center}
   body.side .stage{
     width:auto;gap:10px 14px;align-items:start;justify-content:center;
     grid-template-columns:auto 320px;
@@ -314,7 +319,10 @@
   .acts button.det{background:radial-gradient(circle at 34% 30%,#7be8ff,#0b6f9e);border-color:#b8f2ff;box-shadow:0 4px 0 #063348;color:#02222b}
   .acts button.on,.acts button:active{transform:translateY(3px);box-shadow:0 1px 0 #4b1200}
   @media (max-width:520px){
-    .wrap{padding:10px 10px 30px;gap:10px}
+    .wrap{
+      gap:9px;
+      padding:8px max(8px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+    }
     .marquee{gap:2px}
     .tag{display:none}
     .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
@@ -326,8 +334,8 @@
     .pip{width:7px;height:7px}
     .status{padding:4px 8px;font-size:10px}
     .status .time{font-size:15px}
-    .screen{padding:6px;border-width:2px}
-    .scan,.glow,.overlay{inset:6px}
+    .screen{padding:4px;border-width:2px}
+    .scan,.glow,.overlay{inset:4px}
     .btn{font-size:11px;padding:8px 10px}
     .btn small{font-size:10px}
   }
@@ -396,7 +404,21 @@
   .statgrid b{font-family:var(--pix);color:var(--accent2);font-weight:400}
   .info{grid-area:info;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;min-width:0}
   .box{background:var(--panel);border:2px solid var(--edge);padding:12px 14px;box-shadow:0 2px 0 var(--shadow)}
-  .box h3{font-family:var(--pix);font-size:12px;letter-spacing:.08em;margin:0 0 9px;color:var(--accent)}
+  .box h3{
+    font-family:var(--pix);font-size:12px;letter-spacing:.08em;margin:0 0 9px;color:var(--accent);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  #itemsToggle{
+    display:none;font-family:var(--jp);font-size:11px;letter-spacing:0;
+    background:var(--panel-2);border:2px solid var(--edge);color:var(--ink);
+    padding:2px 10px;cursor:pointer;
+  }
+  body.touch #itemsToggle{display:inline-block}
+  body.touch:not(.itemsopen) #boxItems .itemlist,
+  body.touch:not(.itemsopen) #itemHint{display:none}
+  body.touch:not(.itemsopen) #boxItems h3{margin:0}
+  .item{overflow:hidden}
+  .item b,.item span{overflow-wrap:anywhere}
   .keys{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:13px;align-items:center}
   .keys kbd{
     font-family:var(--pix);font-size:10px;background:var(--panel-2);border:1px solid var(--edge);
@@ -472,7 +494,7 @@
       </div>
     </div>
     <div class="box" id="boxItems">
-      <h3>ITEMS</h3>
+      <h3>ITEMS<button type="button" id="itemsToggle" aria-expanded="false">ひらく</button></h3>
       <p class="hint" id="itemHint">ひろったアイテムは「アイテム」ボタンで選び、「わざ」1回でその場に置く → もう1回で発動します。</p>
       <div class="itemlist" id="itemlist"></div>
     </div>
@@ -2161,6 +2183,16 @@ function togglePause(forceOn){
 }
 btnPause.addEventListener("click",function(){ SFX.ui(); togglePause(); });
 btnQuit.addEventListener("click",function(){ SFX.ui(); showQuitConfirm(); });
+(function(){
+  var tg=document.getElementById("itemsToggle");
+  if(!tg) return;
+  tg.addEventListener("click",function(){
+    var open=document.body.classList.toggle("itemsopen");
+    tg.textContent=open?"とじる":"ひらく";
+    tg.setAttribute("aria-expanded",open?"true":"false");
+    layout();
+  });
+})();
 btnSound.addEventListener("click",function(){
   A.on=!A.on; A.musicOn=A.on;
   btnSound.textContent=A.on?"SOUND ON":"SOUND OFF";
@@ -2509,7 +2541,7 @@ function calcFit(mode,vw,vh,coarse){
   var infoH=(infoEl&&infoEl.offsetHeight)?infoEl.offsetHeight+srow:0;
   var availW,availH,minW=0;
   if(mode==="wide"){
-    availW=vw-padX-dpadBox.offsetWidth-actsBox.offsetWidth-scol*2-chromeW;
+    availW=vw-padX-Math.max(dpadBox.offsetWidth,actsBox.offsetWidth)*2-scol*2-chromeW;
     availH=vh-padTop*2-hudEl.offsetHeight-srow-chromeH;
   } else if(mode==="side"){
     availW=wrapEl.clientWidth-padX-hudEl.offsetWidth-scol-chromeW;
