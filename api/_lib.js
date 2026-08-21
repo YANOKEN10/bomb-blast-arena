@@ -96,6 +96,9 @@ function publicUser(u) {
     id: u.id,
     name: u.name,
     color: u.color | 0,
+    accent: u.accent | 0,
+    eyes: u.eyes | 0,
+    hat: u.hat | 0,
     emblem: u.emblem | 0,
     stats: Object.assign({}, EMPTY_STATS, u.stats || {}),
     created: u.created
