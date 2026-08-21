@@ -1,0 +1,7 @@
+node_modules
+publish
+deploy
+serve.js
+README.md
+*.zip
+.env*

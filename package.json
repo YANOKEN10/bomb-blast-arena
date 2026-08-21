@@ -1,0 +1,9 @@
+{
+  "name": "bomb-blast-arena",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ボム設置型対戦アクション。ブラウザだけで遊べます。",
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  }
+}
