@@ -26,7 +26,7 @@
     --p2:#ff5a6e;
     --p3:#7ce85a;
     --p4:#ffc63d;
-    --pix:"Silkscreen","Courier New",monospace;
+    --pix:"Silkscreen","DotGothic16","Courier New",monospace;
     --jp:"DotGothic16","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
   }
   *{box-sizing:border-box}
@@ -182,6 +182,11 @@
   .btn:active{transform:translateY(3px);box-shadow:0 1px 0 #06050e}
   .btn.primary{border-color:var(--spark);color:var(--spark)}
   .btn.ghost{font-size:10px;padding:6px 10px;box-shadow:0 3px 0 #06050e;text-align:center}
+  .btn.ghost[hidden]{display:none}
+  .btn.ghost.quit{border-color:#7a3550;color:#ff9db0}
+  .btn.ghost.quit:hover,.btn.ghost.quit:focus-visible{border-color:var(--p2);color:var(--p2)}
+  .status .sub{color:#6c66a0}
+  body.tinyscreen .status .sub{display:none}
   :focus-visible{outline:2px solid var(--volt);outline-offset:2px}
 
   .dpad,.acts{
@@ -266,6 +271,7 @@
         <span class="tools">
           <button class="btn ghost" id="btnSound" type="button">SOUND ON</button>
           <button class="btn ghost" id="btnPause" type="button">PAUSE</button>
+          <button class="btn ghost quit" id="btnQuit" type="button" hidden>やめる</button>
         </span>
       </div>
     </section>
@@ -348,6 +354,7 @@ var timerEl=document.getElementById("timer");
 var roundEl=document.getElementById("roundLabel");
 var btnSound=document.getElementById("btnSound");
 var btnPause=document.getElementById("btnPause");
+var btnQuit=document.getElementById("btnQuit");
 
 /* ============ audio ============ */
 var A={ctx:null,on:true,master:null,musicOn:true,timer:null,step:0,next:0};
@@ -1368,7 +1375,12 @@ function updateStatus(){
   var m=Math.floor(t/60), s=t%60;
   timerEl.textContent=m+":"+(s<10?"0":"")+s;
   timerEl.classList.toggle("danger",G.sd);
-  roundEl.textContent=G.mode?("ROUND "+G.round+"  /  FIRST TO "+WINS_NEEDED):"READY";
+  var label=G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+WINS_NEEDED+'</span>'):"READY";
+  if(roundEl.__label!==label){ roundEl.innerHTML=label; roundEl.__label=label; }
+  var playing=!!G.mode&&G.phase!=="title", changed=false;
+  if(btnQuit.hidden===playing){ btnQuit.hidden=!playing; changed=true; }
+  if(btnPause.hidden===playing){ btnPause.hidden=!playing; changed=true; }
+  if(changed) layout();
 }
 
 /* ============ overlays ============ */
@@ -1412,10 +1424,26 @@ function showMatchEnd(){
     '<button class="btn primary" data-act="again">REMATCH<small>同じルールでもう一度</small></button>'+
     '<button class="btn" data-act="title">MODE SELECT<small>モード選択に戻る</small></button></div>');
 }
+function showQuitConfirm(){
+  if(!G.mode||G.phase==="title") return;
+  if(G.phase==="matchend"){ stopMusic(); showTitle(); setPhase("title",0); return; }
+  if(G.phase!=="paused"){
+    prevPhase=G.phase; G.phase="paused";
+    btnPause.textContent="RESUME";
+    stopMusic();
+  }
+  showOverlay('<h2>ゲームをやめますか？</h2>'+
+    '<p>いまのラウンドと勝敗はリセットされ、モード選択に戻ります。</p><div class="menu">'+
+    '<button class="btn primary" data-act="resume">つづける<small>ゲームに戻る</small></button>'+
+    '<button class="btn" data-act="title">やめる<small>モード選択に戻る</small></button></div>');
+}
 function onOverlayClick(act){
   if(MODES[act]) { startMatch(MODES[act]); return; }
   if(act==="resume") togglePause();
-  else if(act==="title"){ stopMusic(); showTitle(); setPhase("title",0); }
+  else if(act==="title"){
+    stopMusic(); prevPhase=null; btnPause.textContent="PAUSE";
+    showTitle(); setPhase("title",0);
+  }
   else if(act==="again"){ startMatch(G.mode); }
 }
 var prevPhase=null;
@@ -1431,6 +1459,7 @@ function togglePause(forceOn){
   }
 }
 btnPause.addEventListener("click",function(){ SFX.ui(); togglePause(); });
+btnQuit.addEventListener("click",function(){ SFX.ui(); showQuitConfirm(); });
 btnSound.addEventListener("click",function(){
   A.on=!A.on; A.musicOn=A.on;
   btnSound.textContent=A.on?"SOUND ON":"SOUND OFF";
