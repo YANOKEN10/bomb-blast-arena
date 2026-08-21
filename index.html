@@ -2258,11 +2258,11 @@ function normLook(src,fallbackColor){
 try{
   ACC.token=localStorage.getItem("bba_token")||"";
   var savedLook=JSON.parse(localStorage.getItem("bba_look")||"null");
-  if(savedLook) LOOK=normLook(savedLook.parts||savedLook,savedLook.color);
+  if(savedLook) LOOK=savedLook.parts?normLook(savedLook.parts):normLook(null,savedLook.color);
 }catch(e){}
 function currentLook(){
   var p=ACC.profile;
-  if(p) return normLook(p.parts,p.color);
+  if(p) return p.parts?normLook(p.parts):normLook(null,p.color);
   return LOOK;
 }
 var modalEl=document.getElementById("modal");
