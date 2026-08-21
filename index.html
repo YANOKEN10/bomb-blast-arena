@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <meta charset="utf-8">
 <title>VORAZ ROBOT BATTLE</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -40,8 +41,9 @@
     --jp:"DotGothic16","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
   }
   *{box-sizing:border-box}
+  html{overflow-x:hidden}
   body{
-    margin:0;
+    margin:0;overflow-x:hidden;
     background-color:var(--mortar,#2b2118);
     background-repeat:repeat;
     background-size:96px 48px;
@@ -119,11 +121,16 @@
 
   .stage{
     display:grid;gap:10px;
-    width:min(100%,var(--sw,100%));margin:0 auto;
-    grid-template-columns:1fr 1fr;
-    grid-template-areas:"hud hud" "screen screen" "dpad acts" "info info";
+    width:min(100%,var(--sw,100%));max-width:100%;margin:0 auto;
+    grid-template-columns:1fr;
+    grid-template-areas:"hud" "screen" "pad" "info";
   }
-  body:not(.touch) .stage{grid-template-columns:1fr;grid-template-areas:"hud" "screen" "info"}
+  .padrow{grid-area:pad;display:none}
+  body.touch:not(.wide) .padrow{
+    display:flex;align-items:center;justify-content:center;gap:12px;
+  }
+  body.wide .padrow{display:contents}
+  body:not(.touch) .stage{grid-template-areas:"hud" "screen" "info"}
   body.wide .stage{
     width:auto;gap:8px clamp(8px,2vw,20px);
     grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
@@ -321,7 +328,7 @@
   @media (max-width:520px){
     .wrap{
       gap:9px;
-      padding:8px max(8px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+      padding:8px max(5px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left));
     }
     .marquee{gap:2px}
     .tag{display:none}
@@ -334,8 +341,8 @@
     .pip{width:7px;height:7px}
     .status{padding:4px 8px;font-size:10px}
     .status .time{font-size:15px}
-    .screen{padding:4px;border-width:2px}
-    .scan,.glow,.overlay{inset:4px}
+    .screen{padding:3px;border-width:2px}
+    .scan,.glow,.overlay{inset:3px}
     .btn{font-size:11px;padding:8px 10px}
     .btn small{font-size:10px}
   }
@@ -457,12 +464,6 @@
       </div>
     </section>
 
-    <div class="dpad" id="dpad">
-      <span class="sp"></span><span data-dir="up">&#9650;</span><span class="sp"></span>
-      <span data-dir="left">&#9664;</span><span class="mid"></span><span data-dir="right">&#9654;</span>
-      <span class="sp"></span><span data-dir="down">&#9660;</span><span class="sp"></span>
-    </div>
-
     <section class="screen" id="screen">
       <span class="bolt tl"></span><span class="bolt tr"></span>
       <span class="bolt bl"></span><span class="bolt br"></span>
@@ -472,13 +473,20 @@
       <div class="overlay" id="overlay"></div>
     </section>
 
-    <div class="acts" id="acts">
-      <button type="button" id="btnBomb" aria-label="ボムをおく">ボム</button>
-      <button type="button" id="btnDet" class="det" aria-label="ばくはつさせる">ばくはつ</button>
-      <button type="button" id="btnSkill" class="skill" aria-label="わざ：1回で設置、もう1回で発動">わざ</button>
-      <button type="button" id="btnItem" class="item-btn" aria-label="アイテムをえらぶ">
-        <canvas width="16" height="16"></canvas><em id="itemCount"></em>
-      </button>
+    <div class="padrow" id="padrow">
+      <div class="dpad" id="dpad">
+        <span class="sp"></span><span data-dir="up">&#9650;</span><span class="sp"></span>
+        <span data-dir="left">&#9664;</span><span class="mid"></span><span data-dir="right">&#9654;</span>
+        <span class="sp"></span><span data-dir="down">&#9660;</span><span class="sp"></span>
+      </div>
+      <div class="acts" id="acts">
+        <button type="button" id="btnBomb" aria-label="ボムをおく">ボム</button>
+        <button type="button" id="btnDet" class="det" aria-label="ばくはつさせる">ばくはつ</button>
+        <button type="button" id="btnSkill" class="skill" aria-label="わざ：1回で設置、もう1回で発動">わざ</button>
+        <button type="button" id="btnItem" class="item-btn" aria-label="アイテムをえらぶ">
+          <canvas width="16" height="16"></canvas><em id="itemCount"></em>
+        </button>
+      </div>
     </div>
  
   <section class="info">
@@ -2547,10 +2555,10 @@ function calcFit(mode,vw,vh,coarse){
     availW=wrapEl.clientWidth-padX-hudEl.offsetWidth-scol-chromeW;
     availH=vh-padTop-mq-chromeH-footH-padBottom-6;
   } else {
-    var ctrlH=coarse?Math.max(dpadBox.offsetHeight,actsBox.offsetHeight)+srow:0;
-    availW=wrapEl.clientWidth-padX-chromeW;
+    var padRow=document.getElementById("padrow");
+    var ctrlH=coarse?((padRow&&padRow.offsetHeight?padRow.offsetHeight:Math.max(dpadBox.offsetHeight,actsBox.offsetHeight))+srow):0;
+    availW=Math.min(wrapEl.clientWidth,vw)-padX-chromeW;
     availH=vh-padTop-mq-hudEl.offsetHeight-srow-ctrlH-infoH-chromeH-footH-padBottom-6;
-    minW=coarse?dpadBox.offsetWidth+actsBox.offsetWidth+scol:0;
   }
   return {fw:Math.floor(clamp(180,Math.min(availW,availH*RATIO),1200)/15)*15, chromeW:chromeW, minW:minW};
 }
@@ -2572,20 +2580,26 @@ function layout(){
   document.body.classList.toggle("compact",(coarse&&!wideOK&&vh<720)||vh<620);
   setMode(wideOK?"wide":"stack");
   if(coarse){
-    var cell=wideOK?clamp(36,Math.round(vh*0.155),54):clamp(42,Math.round(vw*0.145),60);
-    var btn=wideOK?clamp(50,Math.round(vh*0.19),76):clamp(58,Math.round(vw*0.19),84);
+    var cell,btn;
+    if(wideOK){
+      cell=clamp(36,Math.round(vh*0.155),54);
+      btn=clamp(50,Math.round(vh*0.19),76);
+    } else {
+      /* portrait: the field takes the screen width, then the pad and the
+         buttons are sized to stay inside that width */
+      var ws0=getComputedStyle(wrapEl);
+      var ss0=getComputedStyle(screenEl);
+      var padX0=parseFloat(ws0.paddingLeft)+parseFloat(ws0.paddingRight);
+      var chromeW0=parseFloat(ss0.paddingLeft)+parseFloat(ss0.paddingRight)+
+        parseFloat(ss0.borderLeftWidth)+parseFloat(ss0.borderRightWidth);
+      var gap0=parseFloat(getComputedStyle(stageEl).columnGap)||10;
+      var fieldW=Math.floor(clamp(180,vw-padX0-chromeW0,1200)/15)*15;
+      var budget=fieldW-gap0-4;
+      cell=clamp(34,Math.floor((budget*0.50-10)/3),60);
+      btn=clamp(44,Math.floor((budget*0.38-10)/2),80);
+    }
     root.style.setProperty("--cell",cell+"px");
     root.style.setProperty("--btn",btn+"px");
-    if(!wideOK){
-      var ws0=getComputedStyle(wrapEl);
-      var availC=wrapEl.clientWidth-parseFloat(ws0.paddingLeft)-parseFloat(ws0.paddingRight);
-      var ctrlW=dpadBox.offsetWidth+actsBox.offsetWidth+(parseFloat(getComputedStyle(stageEl).columnGap)||0);
-      if(ctrlW>availC){
-        var k=(availC-2)/ctrlW;
-        root.style.setProperty("--cell",Math.max(32,Math.floor(cell*k))+"px");
-        root.style.setProperty("--btn",Math.max(44,Math.floor(btn*k))+"px");
-      }
-    }
   }
   document.body.classList.remove("minimal");
   var modes=wideOK?["wide"]:(coarse?["stack"]:(vw>=640?["stack","side"]:["stack"]));
