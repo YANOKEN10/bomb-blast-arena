@@ -1,2 +1,4 @@
 publish/
+deploy/
+.vercel
 *.zip
