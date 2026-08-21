@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <title>VORAZ ROBOT BATTLE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="description" content="ボムを置いて壁を壊し、爆風で相手を吹き飛ばす最大4人の対戦アクション。CPU対戦・2人プレイ・スマホ操作対応、ブラウザだけで遊べます。">
 <meta name="theme-color" content="#1ea7f0">
 <meta name="apple-mobile-web-app-title" content="VORAZ ROBOT">
@@ -41,7 +41,7 @@
     --jp:"DotGothic16","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
   }
   *{box-sizing:border-box}
-  html{overflow-x:hidden}
+  html{overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
   body{
     margin:0;overflow-x:hidden;
     background-color:var(--mortar,#2b2118);
@@ -263,8 +263,7 @@
   .btn.ghost[hidden]{display:none}
   .btn.ghost.quit{border-color:#7a3550;color:#ff9db0}
   .btn.ghost.quit:hover,.btn.ghost.quit:focus-visible{border-color:var(--p2);color:var(--p2)}
-  .status .sub{color:#6c66a0}
-  body.tinyscreen .status .sub{display:none}
+  .status .sub{color:#6c66a0;font-size:9px}
   :focus-visible{outline:2px solid var(--volt);outline-offset:2px}
 
   .dpad,.acts{
@@ -523,6 +522,7 @@
 "use strict";
 
 /* ============ constants ============ */
+var BUILD="8";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
 var FUSE=2.4, FLAME_LIFE=0.42, REMOTE_FUSE=12;
@@ -2064,12 +2064,29 @@ function updateCards(force){
     }
   }
 }
+/* shown on the title screen so a screenshot tells us what the device did */
+function diagText(){
+  var rs=getComputedStyle(document.documentElement);
+  var doc=document.scrollingElement||document.documentElement;
+  var sw=Math.round(document.getElementById("screen").getBoundingClientRect().width);
+  var over=doc.scrollWidth-doc.clientWidth;
+  return "v"+BUILD+
+    " w"+document.documentElement.clientWidth+
+    (window.visualViewport?("/"+Math.round(window.visualViewport.width)):"")+
+    " f"+(rs.getPropertyValue("--fw").trim()||"?")+
+    " s"+sw+
+    " c"+(rs.getPropertyValue("--cell").trim()||"-")+
+    " b"+(rs.getPropertyValue("--btn").trim()||"-")+
+    " m"+(matchMedia("(max-width:520px)").matches?"1":"0")+
+    (over>1?(" OVER"+over):"");
+}
 function updateStatus(){
   var t=Math.max(0,Math.ceil(G.time));
   var m=Math.floor(t/60), s=t%60;
   timerEl.textContent=m+":"+(s<10?"0":"")+s;
   timerEl.classList.toggle("danger",G.sd);
-  var label=G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+WINS_NEEDED+'</span>'):"READY";
+  var label=G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+WINS_NEEDED+'</span>')
+    :('READY <span class="sub">'+diagText()+'</span>');
   if(roundEl.__label!==label){ roundEl.innerHTML=label; roundEl.__label=label; }
   var playing=!!G.mode&&G.phase!=="title", changed=false;
   if(btnQuit.hidden===playing){ btnQuit.hidden=!playing; changed=true; }
@@ -2572,7 +2589,8 @@ function fitMode(mode,vw,vh,coarse){
 }
 function layout(){
   var vv=window.visualViewport;
-  var vw=Math.round(vv?vv.width:window.innerWidth);
+  /* layout viewport for width so pinch-zoom never reflows the board */
+  var vw=Math.round(document.documentElement.clientWidth||(vv?vv.width:window.innerWidth));
   var vh=Math.round(vv?vv.height:window.innerHeight);
   var coarse=window.matchMedia("(pointer: coarse)").matches||(("ontouchstart" in window)&&Math.min(vw,vh)<900);
   var wideOK=coarse&&vw>vh*1.15;
@@ -2595,8 +2613,8 @@ function layout(){
       var gap0=parseFloat(getComputedStyle(stageEl).columnGap)||10;
       var fieldW=Math.floor(clamp(180,vw-padX0-chromeW0,1200)/15)*15;
       var budget=fieldW-gap0-4;
-      cell=clamp(34,Math.floor((budget*0.50-10)/3),60);
-      btn=clamp(44,Math.floor((budget*0.38-10)/2),80);
+      cell=clamp(32,Math.floor((budget*0.40-10)/3),52);
+      btn=clamp(44,Math.floor((budget*0.30-10)/2),66);
     }
     root.style.setProperty("--cell",cell+"px");
     root.style.setProperty("--btn",btn+"px");
@@ -2633,10 +2651,13 @@ function layout(){
     }
   }
   syncSide();
-  /* last resort: shrink the field until the page needs no scrolling */
+  /* last resort: shrink the field until nothing needs scrolling, in either
+     direction - covers devices whose text metrics differ from ours */
   var doc=document.scrollingElement||document.documentElement;
-  for(var guard=0;guard<14;guard++){
-    if(doc.scrollHeight<=doc.clientHeight+2||best<=180) break;
+  for(var guard=0;guard<16;guard++){
+    var tooTall=doc.scrollHeight>doc.clientHeight+2;
+    var tooWide=doc.scrollWidth>doc.clientWidth+1;
+    if((!tooTall&&!tooWide)||best<=180) break;
     best-=15;
     applyFit(best,calcFit(bestMode,vw,vh,coarse).chromeW,0);
     syncSide();
