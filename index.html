@@ -128,11 +128,12 @@
     align-items:center;justify-content:center;
   }
   body.side .stage{
-    width:auto;gap:12px 14px;align-items:start;justify-content:center;
-    grid-template-columns:auto 244px;
+    width:auto;gap:10px 14px;align-items:start;justify-content:center;
+    grid-template-columns:auto 320px;
     grid-template-rows:auto 1fr;
     grid-template-areas:"screen hud" "screen info";
   }
+  body.side .cards{grid-template-columns:1fr 1fr;gap:5px}
   body.side .info{
     grid-template-columns:1fr;gap:10px;align-content:start;
     max-height:var(--sideH,none);overflow-y:auto;
@@ -147,15 +148,24 @@
   body.side .status .time{font-size:14px}
   body.side .box{padding:9px 11px}
   body.side .box h3{margin:0 0 6px}
-  body.side .keys{font-size:11px;gap:3px 8px}
-  body.side .keys i{font-size:11px}
-  body.side .itemlist{grid-template-columns:1fr 1fr;gap:6px}
-  body.side .item{font-size:10px;line-height:1.3;gap:5px}
-  body.side .item canvas{width:24px;height:24px}
+  body.side .keys{font-size:11px;gap:2px 8px}
+  body.side .keys i{font-size:11px;line-height:1.35}
+  body.side .keys kbd{font-size:9px;padding:1px 5px}
+  body.side #itemHint{font-size:10px;line-height:1.4;margin-bottom:2px}
+  body.tightinfo.side .info{gap:7px}
+  body.tightinfo.side .box{padding:7px 9px}
+  body.tightinfo.side #itemHint{display:none}
+  body.tightinfo.side .keys{gap:1px 7px}
+  body.tightinfo.side .keys i{font-size:10px;line-height:1.25}
+  body.tightinfo.side .keys kbd{font-size:8px;padding:1px 4px;border-bottom-width:2px}
+  body.tightinfo.side .item{font-size:9px;line-height:1.2}
+  body.tightinfo.side .item canvas{width:18px;height:18px}
+  body.side .itemlist{grid-template-columns:1fr 1fr;gap:5px}
+  body.side .item{font-size:10px;line-height:1.25;gap:5px;align-items:center}
+  body.side .item canvas{width:22px;height:22px}
   body.side .item b{font-size:9px}
-  body.side .cards{grid-template-columns:1fr}
-  body.side .status{justify-content:center}
-  body.side .status .tools{flex:1 0 100%;justify-content:center}
+  body.side .status{justify-content:space-between;gap:6px 10px}
+  body.side .status .tools{flex:0 0 auto}
   body.wide .hud{flex-direction:row;align-items:center;gap:8px}
   body.wide .cards{flex:1 1 auto;display:flex;gap:6px}
   body.wide .card{flex:1 1 0;min-width:0}
@@ -2473,10 +2483,12 @@ function layout(){
   }
   /* the desktop sidebar never makes the page taller than the field */
   function syncSide(){
+    document.body.classList.remove("tightinfo");
     if(bestMode==="side"&&infoEl){
       var gs2=getComputedStyle(stageEl);
       var avail=screenEl.offsetHeight-hudEl.offsetHeight-(parseFloat(gs2.rowGap)||0);
       root.style.setProperty("--sideH",Math.max(110,avail)+"px");
+      if(infoEl.scrollHeight>infoEl.clientHeight+1) document.body.classList.add("tightinfo");
     } else {
       root.style.setProperty("--sideH","none");
     }
