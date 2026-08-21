@@ -52,7 +52,6 @@
     color:var(--ink);
     font-family:var(--jp);
     line-height:1.7;
-    min-height:100vh;
     -webkit-font-smoothing:antialiased;
   }
   .wrap{
@@ -522,7 +521,7 @@
 "use strict";
 
 /* ============ constants ============ */
-var BUILD="8";
+var BUILD="9";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
 var FUSE=2.4, FLAME_LIFE=0.42, REMOTE_FUSE=12;
@@ -2631,7 +2630,7 @@ function layout(){
     setMode(bestMode);
     best=fitMode(bestMode,vw,vh,coarse);
   }
-  if(coarse&&stageEl.getBoundingClientRect().bottom>vh+1){
+  if(coarse&&(wrapEl.offsetTop+wrapEl.offsetHeight)>vh+2){
     document.body.classList.add("minimal");
     best=fitMode(bestMode,vw,vh,coarse);
   }
@@ -2655,8 +2654,10 @@ function layout(){
      direction - covers devices whose text metrics differ from ours */
   var doc=document.scrollingElement||document.documentElement;
   for(var guard=0;guard<16;guard++){
-    var tooTall=doc.scrollHeight>doc.clientHeight+2;
-    var tooWide=doc.scrollWidth>doc.clientWidth+1;
+    /* measure the real content box - scrollHeight lies on iOS because of
+       viewport units and the collapsing address bar */
+    var tooTall=(wrapEl.offsetTop+wrapEl.offsetHeight)>vh+2;
+    var tooWide=(wrapEl.scrollWidth>wrapEl.clientWidth+1)||(doc.scrollWidth>doc.clientWidth+1);
     if((!tooTall&&!tooWide)||best<=180) break;
     best-=15;
     applyFit(best,calcFit(bestMode,vw,vh,coarse).chromeW,0);
