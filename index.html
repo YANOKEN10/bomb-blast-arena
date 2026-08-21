@@ -280,6 +280,16 @@
   .swatches,.marks{display:flex;gap:8px;flex-wrap:wrap}
   .swatch{width:34px;height:30px;border:3px solid var(--edge);cursor:pointer;padding:0}
   .swatch.sel{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
+  .palette{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:3px;
+    max-height:170px;overflow-y:auto;padding:6px;
+    background:var(--panel-2);border:2px solid var(--edge);
+  }
+  .palette .swatch{width:100%;height:24px;border-width:2px;border-color:rgba(30,45,65,.25)}
+  .palette .swatch.sel{border-color:var(--ink);border-width:3px;box-shadow:0 0 0 2px #fff inset}
+  .row2{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap}
+  .row2 .btn{flex:0 0 auto}
+  #pfColName{font-family:var(--pix);font-size:11px;color:var(--accent);font-weight:400}
   .maker{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
   .maker canvas{
     width:132px;height:150px;image-rendering:pixelated;flex:none;
@@ -331,7 +341,7 @@
         <span class="tools">
           <button class="btn ghost" id="btnSound" type="button">SOUND ON</button>
           <button class="btn ghost" id="btnPause" type="button">PAUSE</button>
-          <button class="btn ghost quit" id="btnQuit" type="button" hidden>やめる</button>
+          <button class="btn ghost quit" id="btnQuit" type="button" aria-label="ゲームをやめる" hidden>STOP</button>
         </span>
       </div>
     </section>
@@ -417,23 +427,49 @@ function hsl2hex(h,s,l){
   function q(v){ var n=Math.round((v+m)*255); n=Math.max(0,Math.min(255,n)); return (n<16?"0":"")+n.toString(16); }
   return "#"+q(r)+q(g)+q(b);
 }
-var COLOR_DEFS=[
-  ["レッド",0,.72],["オレンジ",22,.80],["アンバー",38,.82],["イエロー",50,.84],
-  ["ライム",76,.66],["グリーン",104,.58],["フォレスト",134,.52],["エメラルド",156,.60],
-  ["ミント",172,.58],["シアン",188,.66],["スカイ",202,.72],["ブルー",216,.70],
-  ["インディゴ",236,.60],["バイオレット",258,.60],["パープル",278,.58],["マゼンタ",300,.62],
-  ["ピンク",324,.72],["ローズ",344,.70],["ブラウン",26,.42],["グレー",214,.10]
+var HUE_DEFS=[
+  ["レッド",0,.74],["オレンジ",22,.82],["アンバー",38,.84],["イエロー",52,.86],
+  ["ライム",76,.68],["グリーン",100,.60],["フォレスト",125,.54],["エメラルド",150,.60],
+  ["ミント",168,.58],["シアン",186,.66],["スカイ",200,.74],["ブルー",215,.72],
+  ["インディゴ",232,.62],["バイオレット",255,.60],["パープル",278,.58],["マゼンタ",300,.64],
+  ["ピンク",322,.74],["ローズ",344,.72]
 ];
-var BODY_COLORS=COLOR_DEFS.map(function(d,i){
-  var h=d[1], s=d[2], lm=(d[0]==="ブラウン")?-.16:0;
+var TONES=[
+  {n:"こい",   ds:.08, dl:-.16},
+  {n:"",       ds:0,   dl:0},
+  {n:"あかるい",ds:-.04,dl:.12},
+  {n:"パステル",ds:-.30,dl:.24},
+  {n:"くすみ", ds:-.34,dl:-.03}
+];
+var NEUTRAL_DEFS=[
+  ["ホワイト",210,.05,.92],["シルバー",210,.07,.78],["グレー",212,.07,.58],
+  ["スレート",214,.12,.42],["チャコール",216,.12,.28],["ブラック",220,.10,.17],
+  ["ベージュ",34,.38,.78],["キャメル",30,.48,.56],["ブラウン",24,.46,.38],["ココア",16,.36,.26]
+];
+function mkPal(key,name,h,s,l){
+  s=Math.max(.03,Math.min(1,s)); l=Math.max(.12,Math.min(.94,l));
   return {
-    key:"c"+i, name:d[0],
-    body: hsl2hex(h,s,.54+lm),
-    dark: hsl2hex(h,Math.min(1,s+.08),.32+lm*.6),
-    light:hsl2hex(h,Math.min(1,s*.7),.88),
-    trim: hsl2hex(h,Math.min(1,s+.1),.20+lm*.4)
+    key:key, name:name, h:h,
+    body: hsl2hex(h,s,l),
+    dark: hsl2hex(h,Math.min(1,s+.06),Math.max(.14,l-.20)),
+    light:hsl2hex(h,Math.min(1,s*.55+.05),Math.min(.95,l+.30)),
+    trim: hsl2hex(h,Math.min(1,s+.08),Math.max(.10,l-.34))
   };
-});
+}
+var BODY_COLORS=[];
+(function(){
+  for(var i=0;i<HUE_DEFS.length;i++){
+    for(var t=0;t<TONES.length;t++){
+      var h=HUE_DEFS[i][1], s=HUE_DEFS[i][2]+TONES[t].ds, l=.54+TONES[t].dl;
+      var nm=HUE_DEFS[i][0]+(TONES[t].n?"・"+TONES[t].n:"");
+      BODY_COLORS.push(mkPal("c"+BODY_COLORS.length,nm,h,s,l));
+    }
+  }
+  for(var k=0;k<NEUTRAL_DEFS.length;k++){
+    var d=NEUTRAL_DEFS[k];
+    BODY_COLORS.push(mkPal("c"+BODY_COLORS.length,d[0],d[1],d[2],d[3]));
+  }
+})();
 var SPAWNS=[[1,1],[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2]];
 
 var STAGES=[
@@ -660,7 +696,7 @@ function newField(){
   }
 }
 
-var SLOT_COLORS=[11,0,6,3];
+var SLOT_COLORS=[56,1,26,16];
 function makePlayer(slot,isAI,label){
   var pal=BODY_COLORS[SLOT_COLORS[slot%SLOT_COLORS.length]];
   var sp=SPAWNS[slot];
@@ -1810,7 +1846,7 @@ function showTitle(){
     '<button class="btn" data-act="solo2">1P VS CPU x2<small>3人バトル。挟み撃ちに注意</small></button>'+
     '<button class="btn" data-act="solo3">1P VS CPU x3<small>4人フルバトル。混戦必至</small></button>'+
     '<button class="btn" data-act="duo">2P + CPU x2<small>1台で2人対戦（矢印キー / WASD）</small></button>'+
-    '<button class="btn" data-act="maker">キャラをつくる<small>いろ・め・ぼうしをえらぶ</small></button>'+
+    '<button class="btn" data-act="maker">EDIT<small>キャラの いろをえらぶ（20色）</small></button>'+
     '<button class="btn ghost" data-act="account">'+
       (ACC.profile?("★ "+ACC.profile.name+" でログイン中"):"ログイン / とうろく（メール不要）")+
     '</button>'+
@@ -1969,7 +2005,7 @@ function frame(ts){
 /* ============ account ============ */
 var API=/github\.io$/i.test(location.hostname)?"https://bomb-blast-arena.vercel.app":"";
 var ACC={token:"",profile:null,busy:false};
-var LOOK={color:11,accent:1,eyes:0,hat:0};
+var LOOK={color:56,accent:1,eyes:0,hat:0};
 try{
   ACC.token=localStorage.getItem("bba_token")||"";
   var savedLook=JSON.parse(localStorage.getItem("bba_look")||"null");
@@ -2073,6 +2109,7 @@ function openMaker(){
     sw+='<button class="swatch'+(i===(p.color|0)?" sel":"")+'" data-color="'+i+'" type="button" '+
       'style="background:'+BODY_COLORS[i].body+'" title="'+BODY_COLORS[i].name+'" aria-label="'+BODY_COLORS[i].name+'"></button>';
   }
+  sw='<div class="palette">'+sw+'</div>';
   var st=p.stats||{};
   sheetEl.innerHTML=
     '<h2>キャラメイク</h2>'+
@@ -2084,7 +2121,10 @@ function openMaker(){
     (guest ? '' :
       '<div class="field"><label for="pfName">なまえ（12文字まで）</label>'+
       '<input id="pfName" type="text" maxlength="12" value="'+String(p.name||"").replace(/"/g,"&quot;")+'"></div>')+
-    '<div class="field"><label>キャラの いろ（20色）</label><div class="swatches" id="pfColors">'+sw+'</div></div>'+
+    '<div class="field"><label>キャラの いろ　<b id="pfColName">'+
+      String((BODY_COLORS[p.color|0]||BODY_COLORS[0]).name)+'</b></label>'+sw+
+      '<div class="row2"><button class="btn ghost" id="pfRand" type="button">ランダム</button>'+
+      '<span class="hint">'+BODY_COLORS.length+'色から えらべます</span></div></div>'+
     '</div></div>'+
     (guest ? '' :
       '<div class="statgrid">'+
@@ -2114,17 +2154,20 @@ function openMaker(){
     if(prevStep===0) prevDir=["down","left","up","right"][(Math.random()*4)|0];
     drawPreview();
   },420);
-  function picker(attr,key){
-    sheetEl.querySelectorAll("["+attr+"]").forEach(function(b){
-      b.onclick=function(){
-        pick[key]=+b.getAttribute(attr);
-        sheetEl.querySelectorAll("["+attr+"]").forEach(function(o){ o.classList.remove("sel"); });
-        b.classList.add("sel");
-        drawPreview();
-      };
-    });
+  var nameEl=document.getElementById("pfColName");
+  function selectColor(idx,scroll){
+    pick.color=Math.max(0,Math.min(BODY_COLORS.length-1,idx));
+    sheetEl.querySelectorAll("[data-color]").forEach(function(o){ o.classList.remove("sel"); });
+    var b=sheetEl.querySelector('[data-color="'+pick.color+'"]');
+    if(b){ b.classList.add("sel"); if(scroll&&b.scrollIntoView) b.scrollIntoView({block:"nearest"}); }
+    if(nameEl) nameEl.textContent=BODY_COLORS[pick.color].name;
+    drawPreview();
   }
-  picker("data-color","color");
+  sheetEl.querySelectorAll("[data-color]").forEach(function(b){
+    b.onclick=function(){ selectColor(+b.getAttribute("data-color"),false); };
+  });
+  var randBtn=document.getElementById("pfRand");
+  if(randBtn) randBtn.onclick=function(){ selectColor((Math.random()*BODY_COLORS.length)|0,true); };
   drawPreview();
   var err=document.getElementById("pfErr");
   document.getElementById("pfSave").onclick=function(){

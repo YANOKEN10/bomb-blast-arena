@@ -36,7 +36,7 @@ module.exports = async function handler(req, res) {
         id: id,
         display: rawId,
         name: L.cleanName(b.name || rawId, rawId.slice(0, 12)),
-        color: Math.max(0, Math.min(7, b.color | 0)),
+        color: Math.max(0, Math.min(199, b.color | 0)),
         accent: Math.max(0, Math.min(3, b.accent | 0)),
         eyes: Math.max(0, Math.min(5, b.eyes | 0)),
         hat: Math.max(0, Math.min(3, b.hat | 0)),

@@ -24,7 +24,7 @@ module.exports = async function handler(req, res) {
 
     if (b.profile && typeof b.profile === "object") {
       if (b.profile.name != null) { user.name = L.cleanName(b.profile.name, user.name); dirty = true; }
-      if (b.profile.color != null) { user.color = Math.max(0, Math.min(7, b.profile.color | 0)); dirty = true; }
+      if (b.profile.color != null) { user.color = Math.max(0, Math.min(199, b.profile.color | 0)); dirty = true; }
       if (b.profile.accent != null) { user.accent = Math.max(0, Math.min(3, b.profile.accent | 0)); dirty = true; }
       if (b.profile.eyes != null) { user.eyes = Math.max(0, Math.min(5, b.profile.eyes | 0)); dirty = true; }
       if (b.profile.hat != null) { user.hat = Math.max(0, Math.min(3, b.profile.hat | 0)); dirty = true; }
