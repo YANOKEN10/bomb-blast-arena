@@ -213,7 +213,16 @@
     grid-template-columns:repeat(3,var(--cell,52px));
     grid-template-rows:repeat(3,var(--cell,52px));
   }
-  .acts{grid-area:acts;justify-self:end;gap:12px;align-items:center}
+  .acts{grid-area:acts;justify-self:end;gap:16px;align-items:center}
+  .acts button i{display:block;font-style:normal;font-size:9px;line-height:1.1;opacity:.75}
+  body.touch .cards{display:none}
+  body.touch #boxControls{display:none}
+  body.touch .info{grid-template-columns:1fr}
+  body.touch .itemlist{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 6px}
+  body.touch .item{gap:6px;font-size:10px;line-height:1.35;min-width:0}
+  body.touch .item canvas{width:26px;height:26px}
+  body.touch .item b{font-size:9px}
+  body.wide .info{display:none}
   body.touch .dpad{display:grid}
   body.touch .acts{display:flex}
   body.wide .dpad,body.wide .acts{justify-self:auto}
@@ -229,7 +238,7 @@
   .acts button{
     width:var(--btn,76px);height:var(--btn,76px);border-radius:50%;padding:0;
     background:radial-gradient(circle at 34% 30%,#ff8a4f,#c22f00);
-    border:3px solid #ffb27a;color:#2a0d00;font-family:var(--pix);font-size:10px;
+    border:3px solid #ffb27a;color:#2a0d00;font-family:var(--jp);font-size:12px;line-height:1.15;
     box-shadow:0 4px 0 #4b1200;touch-action:none;-webkit-tap-highlight-color:transparent;
   }
   .acts button.det{background:radial-gradient(circle at 34% 30%,#7be8ff,#0b6f9e);border-color:#b8f2ff;box-shadow:0 4px 0 #063348;color:#02222b}
@@ -362,26 +371,26 @@
     </section>
 
     <div class="acts" id="acts">
-      <button type="button" id="btnBomb" aria-label="ボムを置く">BOMB</button>
-      <button type="button" id="btnDet" class="det" aria-label="わざ（起爆・トラップ設置）">わざ</button>
+      <button type="button" id="btnBomb" aria-label="ボムをおく">ボム<i>おく</i></button>
+      <button type="button" id="btnDet" class="det" aria-label="ばくはつさせる">ばくはつ</button>
     </div>
   </div>
 
   <section class="info">
-    <div class="box">
+    <div class="box" id="boxControls">
       <h3>CONTROLS</h3>
       <div class="keys">
         <kbd>&#8592; &#8593; &#8594; &#8595;</kbd><i>1P 移動</i>
         <kbd>SPACE</kbd><i>1P ボムを置く</i>
-        <kbd>ENTER</kbd><i>1P わざ（起爆・トラップ設置）</i>
+        <kbd>ENTER</kbd><i>1P ばくはつ（リモコン起爆・トラップ設置）</i>
         <kbd>W A S D</kbd><i>2P 移動</i>
         <kbd>F</kbd><i>2P ボムを置く</i>
-        <kbd>G</kbd><i>2P わざ</i>
+        <kbd>G</kbd><i>2P ばくはつ</i>
         <kbd>P</kbd><i>ポーズ / 再開</i>
         <kbd>PIG</kbd><i>ブタに乗ると、壁に向かって歩き続けるだけで1マス跳び越えます</i>
       </div>
     </div>
-    <div class="box">
+    <div class="box" id="boxItems">
       <h3>ITEMS</h3>
       <div class="itemlist" id="itemlist"></div>
     </div>
