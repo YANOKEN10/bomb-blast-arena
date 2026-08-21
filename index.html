@@ -434,25 +434,6 @@ var BODY_COLORS=COLOR_DEFS.map(function(d,i){
     trim: hsl2hex(h,Math.min(1,s+.1),.20+lm*.4)
   };
 });
-var ACCENTS=[
-  {name:"シルバー", c:"#b8c6d9", d:"#7d8ba1"},
-  {name:"ゴールド", c:"#e5b528", d:"#9c7605"},
-  {name:"ピンク",   c:"#ff9fc4", d:"#c25f88"},
-  {name:"ミント",   c:"#7ce0d0", d:"#3d9b8c"}
-];
-var EYE_MAPS={
-  diamond:[".a.","aaa",".a."],
-  heart:  ["a.a","aaa",".a."],
-  sleepy: ["ddd","aaa","..."],
-  angry:  ["dd.",".dd",".aa"],
-  star:   ["a.a",".a.","a.a"],
-  shades: null
-};
-var EYES=[
-  {id:"diamond",name:"ダイヤ"},{id:"heart",name:"ハート"},{id:"sleepy",name:"ねむり"},
-  {id:"angry",name:"おこり"},{id:"star",name:"スター"},{id:"shades",name:"サングラス"}
-];
-var HATS=[{id:"none",name:"なし"},{id:"cap",name:"キャップ"},{id:"top",name:"シルクハット"},{id:"crown",name:"かんむり"}];
 var SPAWNS=[[1,1],[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2]];
 
 var STAGES=[
@@ -688,9 +669,6 @@ function makePlayer(slot,isAI,label){
     x:sp[0]*T+T/2, y:sp[1]*T+T/2, dir:slot===1||slot===3?"up":"down",
     speed:BASE_SPEED, fire:1, maxBombs:1, kick:false, pierce:false, remote:false,
     traps:0, pig:false, invul:0, hop:null, bump:0,
-    accent:isAI?((Math.random()*ACCENTS.length)|0):0,
-    eyes:isAI?((Math.random()*EYES.length)|0):0,
-    hat:isAI?(Math.random()<0.55?0:((Math.random()*HATS.length)|0)):0,
     live:0, alive:true, deadT:0, wins:0, anim:0, walking:false,
     mv:{dx:0,dy:0}, think:0, bombCd:0, target:-1, plan:null
   };
@@ -724,9 +702,6 @@ function startMatch(mode,stage){
   }
   var lk=currentLook(), p0=G.players[0];
   p0.pal=BODY_COLORS[Math.max(0,Math.min(BODY_COLORS.length-1,lk.color|0))];
-  p0.accent=Math.max(0,Math.min(ACCENTS.length-1,lk.accent|0));
-  p0.eyes=Math.max(0,Math.min(EYES.length-1,lk.eyes|0));
-  p0.hat=Math.max(0,Math.min(HATS.length-1,lk.hat|0));
   if(ACC.profile) p0.label=ACC.profile.name||"P1";
   var used={}; used[p0.pal.key]=1;
   for(var q=1;q<G.players.length;q++){
@@ -1591,99 +1566,43 @@ function drawPig(x,y,p,step){
   }
   ctx.fillStyle=dark; ctx.fillRect(x-s*8,y-7,1,2); ctx.fillRect(x-s*9,y-8,1,2);
 }
-var OUTLINE="#141820";
-function look(p){
-  return {
-    pal:p.pal,
-    acc:ACCENTS[Math.max(0,Math.min(ACCENTS.length-1,p.accent|0))],
-    eyes:EYES[Math.max(0,Math.min(EYES.length-1,p.eyes|0))].id,
-    hat:HATS[Math.max(0,Math.min(HATS.length-1,p.hat|0))].id
-  };
-}
-function eyeMap(g,map,px,py,acc,flip){
-  for(var r=0;r<map.length;r++){
-    var row=map[r];
-    for(var c=0;c<row.length;c++){
-      var ch=row.charAt(flip?row.length-1-c:c);
-      if(ch===".") continue;
-      g.fillStyle=(ch==="d")?OUTLINE:acc;
-      g.fillRect(px+c,py+r,1,1);
-    }
-  }
-}
-/* head: 8 wide interior (ox-4..ox+3), 5 tall (oy+1..oy+5), 1px outline, 1px ears */
-function drawHead(g,ox,oy,o,dir){
-  var pal=o.pal, acc=o.acc.c;
-  /* ears */
-  g.fillStyle=acc;
-  if(dir!=="right") g.fillRect(ox-6,oy+2,1,3);
-  if(dir!=="left") g.fillRect(ox+5,oy+2,1,3);
-  /* head box with a notched crown */
-  g.fillStyle=OUTLINE; g.fillRect(ox-5,oy,10,7);
-  g.fillStyle=pal.body; g.fillRect(ox-4,oy+1,8,5);
-  g.fillStyle=OUTLINE; g.fillRect(ox-1,oy,2,1);
-  g.fillStyle=acc; g.fillRect(ox-4,oy+1,2,1); g.fillRect(ox+2,oy+1,2,1);
-  /* face */
+var VISOR="#141230";
+/* helmet + visor character, drawn from the chosen colour */
+function drawCharHead(g,x,top,pal,dir){
+  g.fillStyle=pal.trim; g.fillRect(x-5,top,10,8);
+  g.fillStyle=pal.body; g.fillRect(x-4,top+1,8,6);
+  g.fillStyle=pal.light; g.fillRect(x-4,top+1,3,2);
   if(dir==="up"){
-    g.fillStyle=OUTLINE; g.fillRect(ox-2,oy+3,5,1);
-    return;
-  }
-  var sh=dir==="left"?-1:(dir==="right"?1:0);
-  if(o.eyes==="shades"){
-    g.fillStyle=OUTLINE; g.fillRect(ox-4+sh,oy+2,8,3);
-    g.fillStyle=pal.light;
-    g.fillRect(ox-3+sh,oy+3,1,1); g.fillRect(ox+2+sh,oy+3,1,1);
-    return;
-  }
-  var map=EYE_MAPS[o.eyes]||EYE_MAPS.diamond;
-  eyeMap(g,map,ox-4+sh,oy+2,acc,false);
-  eyeMap(g,map,ox+1+sh,oy+2,acc,o.eyes==="angry");
-}
-function drawHat(g,ox,oy,o,dir){
-  var acc=o.acc.c, accD=o.acc.d;
-  if(o.hat==="cap"){
-    g.fillStyle=OUTLINE; g.fillRect(ox-5,oy-2,10,2);
-    g.fillStyle=acc; g.fillRect(ox-4,oy-2,8,1);
-    var bx=dir==="left"?ox-8:(dir==="right"?ox+5:ox-3);
-    var bw=(dir==="down"||dir==="up")?6:3;
-    g.fillStyle=accD; g.fillRect(bx,oy-1,bw,1);
-  } else if(o.hat==="top"){
-    g.fillStyle=OUTLINE; g.fillRect(ox-3,oy-5,6,5);
-    g.fillStyle=o.pal.dark; g.fillRect(ox-2,oy-4,4,3);
-    g.fillStyle=acc; g.fillRect(ox-2,oy-3,4,1);
-    g.fillStyle=OUTLINE; g.fillRect(ox-6,oy-1,12,1);
-  } else if(o.hat==="crown"){
-    g.fillStyle=OUTLINE; g.fillRect(ox-4,oy-2,8,2);
-    g.fillStyle="#e5b528"; g.fillRect(ox-4,oy-2,8,1);
-    g.fillStyle="#e5b528"; g.fillRect(ox-4,oy-3,1,1); g.fillRect(ox-1,oy-3,2,1); g.fillRect(ox+3,oy-3,1,1);
+    g.fillStyle=pal.dark; g.fillRect(x-3,top+3,6,3);
+  } else if(dir==="down"){
+    g.fillStyle=VISOR; g.fillRect(x-3,top+3,6,3);
+    g.fillStyle=pal.light; g.fillRect(x-2,top+4,1,1); g.fillRect(x+1,top+4,1,1);
+  } else {
+    var s=dir==="right"?1:-1;
+    g.fillStyle=VISOR; g.fillRect(x-1+(s>0?1:-3),top+3,4,3);
+    g.fillStyle=pal.light; g.fillRect(x+(s>0?2:-2),top+4,1,1);
   }
 }
-/* full character: feet centred at (x,y). 14 wide x 18 tall, same footprint as the original */
-function drawRobot(g,x,y,o,dir,step){
-  var pal=o.pal, acc=o.acc.c;
+function drawChar(g,x,y,pal,dir,step){
   var top=y-14;
   var la=step===1?1:0, lb=step===3?1:0;
   /* legs */
-  g.fillStyle=OUTLINE;
-  g.fillRect(x-4,top+13-la,3,5+la); g.fillRect(x+1,top+13-lb,3,5+lb);
-  g.fillStyle=pal.dark;
-  g.fillRect(x-3,top+14-la,1,3+la); g.fillRect(x+2,top+14-lb,1,3+lb);
-  /* arms */
-  g.fillStyle=OUTLINE; g.fillRect(x-6,top+8,2,4); g.fillRect(x+4,top+8,2,4);
-  g.fillStyle=pal.body; g.fillRect(x-6,top+9,1,2); g.fillRect(x+5,top+9,1,2);
+  g.fillStyle=pal.trim;
+  g.fillRect(x-4,top+13-la,3,4+la);
+  g.fillRect(x+1,top+13-lb,3,4+lb);
   /* body */
-  g.fillStyle=OUTLINE; g.fillRect(x-5,top+7,10,7);
+  g.fillStyle=pal.dark; g.fillRect(x-5,top+7,10,7);
   g.fillStyle=pal.body; g.fillRect(x-4,top+8,8,5);
-  g.fillStyle=acc;
-  g.fillRect(x-3,top+9,4,1); g.fillRect(x-3,top+10,1,1); g.fillRect(x+1,top+11,3,1);
-  /* head + hat */
-  drawHead(g,x,top,o,dir);
-  drawHat(g,x,top,o,dir);
+  g.fillStyle=pal.light; g.fillRect(x-2,top+9,4,3);
+  /* arms */
+  g.fillStyle=pal.dark;
+  g.fillRect(x-6,top+8,2,4); g.fillRect(x+4,top+8,2,4);
+  /* helmet */
+  drawCharHead(g,x,top,pal,dir);
 }
-function drawPortrait(g,ox,oy,o){
+function drawPortrait(g,ox,oy,pal){
   g.clearRect(0,0,16,16);
-  drawHead(g,ox+8,oy+4,o,"down");
-  drawHat(g,ox+8,oy+4,o,"down");
+  drawCharHead(g,ox+8,oy+4,pal,"down");
 }
 function drawFighter(p){
   var x=Math.round(p.x), y=Math.round(p.y);
@@ -1703,7 +1622,7 @@ function drawFighter(p){
   ctx.fillStyle="rgba(0,0,0,"+(arc?0.18:0.34)+")";
   ctx.fillRect(x-5-(arc?1:0),y+2,10+(arc?2:0),3);
   if(p.pig&&p.alive) drawPig(x,y-arc,p,step);
-  drawRobot(ctx,x,oy,look(p),p.dir,step);
+  drawChar(ctx,x,oy,p.pal,p.dir,step);
   ctx.globalAlpha=1;
 }
 function drawFlameCell(cell,f){
@@ -1812,7 +1731,7 @@ function buildCards(){
     var pips=el.querySelector(".pips");
     for(var k=0;k<WINS_NEEDED;k++){ var s=document.createElement("span"); s.className="pip"; pips.appendChild(s); }
     var embCv=el.querySelector(".emb");
-    if(embCv) drawPortrait(embCv.getContext("2d"),0,0,look(p));
+    if(embCv) drawPortrait(embCv.getContext("2d"),0,0,p.pal);
     cardsEl.appendChild(el);
     cardRefs.push({el:el,pips:pips,stats:el.querySelectorAll(".stats u"),badges:el.querySelector(".badges")});
   }
@@ -2049,7 +1968,6 @@ function frame(ts){
 
 /* ============ account ============ */
 var API=/github\.io$/i.test(location.hostname)?"https://bomb-blast-arena.vercel.app":"";
-var EMBLEMS=["bomb","fire","pig","trap","speed","kick"];
 var ACC={token:"",profile:null,busy:false};
 var LOOK={color:11,accent:1,eyes:0,hat:0};
 try{
@@ -2150,20 +2068,10 @@ function openMaker(){
   var guest=!p;
   if(guest) p={id:"",name:"",color:lk.color,accent:lk.accent,eyes:lk.eyes,hat:lk.hat,stats:null};
   modalEl.hidden=false;
-  var sw="",ac="",ey="",ht="";
+  var sw="";
   for(var i=0;i<BODY_COLORS.length;i++){
     sw+='<button class="swatch'+(i===(p.color|0)?" sel":"")+'" data-color="'+i+'" type="button" '+
-      'style="background:'+BODY_COLORS[i].body+'" aria-label="'+BODY_COLORS[i].name+'"></button>';
-  }
-  for(var a=0;a<ACCENTS.length;a++){
-    ac+='<button class="swatch'+(a===(p.accent|0)?" sel":"")+'" data-accent="'+a+'" type="button" '+
-      'style="background:'+ACCENTS[a].c+'" aria-label="'+ACCENTS[a].name+'"></button>';
-  }
-  for(var e=0;e<EYES.length;e++){
-    ey+='<button class="pick'+(e===(p.eyes|0)?" sel":"")+'" data-eyes="'+e+'" type="button">'+EYES[e].name+'</button>';
-  }
-  for(var h=0;h<HATS.length;h++){
-    ht+='<button class="pick'+(h===(p.hat|0)?" sel":"")+'" data-hat="'+h+'" type="button">'+HATS[h].name+'</button>';
+      'style="background:'+BODY_COLORS[i].body+'" title="'+BODY_COLORS[i].name+'" aria-label="'+BODY_COLORS[i].name+'"></button>';
   }
   var st=p.stats||{};
   sheetEl.innerHTML=
@@ -2176,11 +2084,8 @@ function openMaker(){
     (guest ? '' :
       '<div class="field"><label for="pfName">なまえ（12文字まで）</label>'+
       '<input id="pfName" type="text" maxlength="12" value="'+String(p.name||"").replace(/"/g,"&quot;")+'"></div>')+
-    '<div class="field"><label>からだの いろ（20色）</label><div class="swatches" id="pfColors">'+sw+'</div></div>'+
-    '<div class="field"><label>パーツの いろ</label><div class="swatches">'+ac+'</div></div>'+
+    '<div class="field"><label>キャラの いろ（20色）</label><div class="swatches" id="pfColors">'+sw+'</div></div>'+
     '</div></div>'+
-    '<div class="field"><label>め</label><div class="picks">'+ey+'</div></div>'+
-    '<div class="field"><label>ぼうし</label><div class="picks">'+ht+'</div></div>'+
     (guest ? '' :
       '<div class="statgrid">'+
       '<div><span>あそんだ回数</span><b>'+(st.matches|0)+'</b></div>'+
@@ -2200,11 +2105,7 @@ function openMaker(){
   function drawPreview(){
     pctx.clearRect(0,0,prev.width,prev.height);
     pctx.save(); pctx.scale(6,6);
-    drawRobot(pctx,11,23,{
-      pal:BODY_COLORS[pick.color]||BODY_COLORS[0],
-      acc:ACCENTS[pick.accent]||ACCENTS[0],
-      eyes:EYES[pick.eyes].id, hat:HATS[pick.hat].id
-    },prevDir,prevStep);
+    drawChar(pctx,11,21,BODY_COLORS[pick.color]||BODY_COLORS[0],prevDir,prevStep);
     pctx.restore();
   }
   var prevTimer=setInterval(function(){
@@ -2223,8 +2124,7 @@ function openMaker(){
       };
     });
   }
-  picker("data-color","color"); picker("data-accent","accent");
-  picker("data-eyes","eyes"); picker("data-hat","hat");
+  picker("data-color","color");
   drawPreview();
   var err=document.getElementById("pfErr");
   document.getElementById("pfSave").onclick=function(){
