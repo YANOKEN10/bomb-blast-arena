@@ -111,6 +111,7 @@ function publicUser(u) {
     eyes: u.eyes | 0,
     hat: u.hat | 0,
     emblem: u.emblem | 0,
+    story: Math.max(0, Math.min(50, u.story | 0)),
     stats: Object.assign({}, EMPTY_STATS, u.stats || {}),
     created: u.created
   };

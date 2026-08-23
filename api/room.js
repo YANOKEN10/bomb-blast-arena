@@ -126,10 +126,6 @@ module.exports = async function handler(req, res) {
 
     res.status(400).json({ error: "action" });
   } catch (e) {
-    res.status(500).json({
-      error: "server",
-      message: "つうしんに しっぱいしました。",
-      detail: process.env.VERCEL_ENV ? undefined : String((e && (e.name + ": " + e.message)) || e)
-    });
+    res.status(500).json({ error: "server", message: "つうしんに しっぱいしました。" });
   }
 };

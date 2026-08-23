@@ -42,6 +42,7 @@ module.exports = async function handler(req, res) {
         eyes: Math.max(0, Math.min(5, b.eyes | 0)),
         hat: Math.max(0, Math.min(3, b.hat | 0)),
         emblem: Math.max(0, Math.min(5, b.emblem | 0)),
+        story: Math.max(0, Math.min(50, b.story | 0)),
         salt: salt,
         pw: L.hashPw(pw, salt),
         stats: Object.assign({}, L.EMPTY_STATS),

@@ -33,6 +33,10 @@ module.exports = async function handler(req, res) {
       if (b.profile.eyes != null) { user.eyes = Math.max(0, Math.min(5, b.profile.eyes | 0)); dirty = true; }
       if (b.profile.hat != null) { user.hat = Math.max(0, Math.min(3, b.profile.hat | 0)); dirty = true; }
       if (b.profile.emblem != null) { user.emblem = Math.max(0, Math.min(5, b.profile.emblem | 0)); dirty = true; }
+      if (b.profile.story != null) {
+        const st = Math.max(0, Math.min(50, b.profile.story | 0));
+        if (st > (user.story | 0)) { user.story = st; dirty = true; }
+      }
     }
     if (b.newPw != null && String(b.newPw).length >= 4) {
       if (!L.checkPw(String(b.oldPw == null ? "" : b.oldPw), user)) {

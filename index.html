@@ -231,6 +231,15 @@
   }
   .overlay p{margin:0;font-size:var(--ovp,13px);color:var(--muted);max-width:44ch}
   .menu{display:flex;flex-direction:column;gap:8px;width:min(330px,100%)}
+  .menu.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:min(480px,100%)}
+  .menu.grid2 .wide{grid-column:1/-1}
+  .menu.grid2 .btn{padding:6px 8px;font-size:11px}
+  .menu.grid2 .btn small{font-size:9px;line-height:1.25}
+  .btn.locked{opacity:.5;filter:grayscale(.7)}
+  .btn.done{border-color:var(--flare)}
+  .btn.done b{color:var(--flare)}
+  .overlay.c2 .menu.grid2 .btn small{display:none}
+  body.tinyscreen .menu.grid2{gap:4px}
   .overlay.c1 .btn small{display:none}
   .overlay.c1 .btn{padding:7px 10px}
   .overlay.c1 .menu{gap:6px}
@@ -386,6 +395,7 @@
   .swatches,.marks{display:flex;gap:8px;flex-wrap:wrap}
   .swatch{width:34px;height:30px;border:3px solid var(--edge);cursor:pointer;padding:0}
   .swatch.sel{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
+  .swatch.locked{cursor:default;font-size:9px;line-height:1;color:#4a5260;opacity:.75}
   .palette{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:3px;
     max-height:170px;overflow-y:auto;padding:6px;
@@ -535,7 +545,7 @@
 "use strict";
 
 /* ============ constants ============ */
-var BUILD="9";
+var BUILD="10";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
 var FUSE=2.4, FLAME_LIFE=0.42, REMOTE_FUSE=12;
@@ -604,6 +614,18 @@ var BODY_COLORS=[];
     var d=NEUTRAL_DEFS[k];
     BODY_COLORS.push(mkPal("c"+BODY_COLORS.length,d[0],d[1],d[2],d[3]));
   }
+  /* story rewards - hidden until the matching chapter is cleared */
+  var REWARDS=[
+    ["ミッドナイト",232,.55,.26,2],["サンセット",14,.85,.60,4],
+    ["ジェイド",158,.70,.42,6],["ロイヤル",268,.66,.44,8],
+    ["フレイム",8,.92,.52,10],["チャンピオン",45,.95,.62,11]
+  ];
+  for(var w=0;w<REWARDS.length;w++){
+    var rw=REWARDS[w];
+    var pal=mkPal("c"+BODY_COLORS.length,"★"+rw[0],rw[1],rw[2],rw[3]);
+    pal.lock=rw[4];
+    BODY_COLORS.push(pal);
+  }
 })();
 var SPAWNS=[[1,1],[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2]];
 
@@ -636,6 +658,81 @@ var STAGES=[
     brick:{mortar:"#241a12",body:"#b0492a",light:"#e2734a",dark:"#6f2a15",moss:"#c8761a"}
   }
 ];
+/* extra stages: same shape as above, built from a compact table */
+function mkStage(d){
+  return {
+    id:d.id, name:d.name, sub:d.sub,
+    floorA:d.f[0], floorB:d.f[1], line:d.f[2], speck:d.f[3],
+    hard:d.h, soft:d.s, edge:d.e, edgeKind:d.k||"motif", motif:d.m||null,
+    page:d.p, accent:d.a, accent2:d.a2, brick:d.b
+  };
+}
+STAGES=STAGES.concat([
+  mkStage({id:"snow",name:"ゆきやま",sub:"雪・氷・きのぼり",
+    f:["#e8f2fb","#dceaf7","#b9cee2","#ffffff"],
+    h:["#7d9cbb","#b7d2e8","#5a7894","#3f5a72"],
+    s:["#63c8e0","#a8eaf7","#2f8fa8","#46aac4"],
+    e:["#7fb2d9","#a9d3f0","#4d7ea8","#ffffff"],
+    m:[".aa..","aabaa","abbba","aabaa",".aa.."],
+    p:["#eef7ff","#c3ddf2"],a:"#2f6f9e",a2:"#4a5f8f",
+    b:{mortar:"#3a4a5c",body:"#8fa9c2",light:"#c3d8ea",dark:"#5f7a94",moss:"#ffffff"}}),
+  mkStage({id:"desert",name:"さばく",sub:"砂・遺跡・サボテン",
+    f:["#eddba5","#e4d097","#c8b075","#f7ecc8"],
+    h:["#c8a86e","#e6cb95","#96794a","#6f5732"],
+    s:["#cf7f3a","#eda662","#8f4f18","#b06a2c"],
+    e:["#4f9c46","#6fc264","#2f6b2a","#c8a86e"],
+    m:["..a..",".aaa.","aaaaa",".aaa.","..a.."],
+    p:["#fff4d6","#ecd49a"],a:"#b07a1e",a2:"#8a5a2b",
+    b:{mortar:"#4a3a22",body:"#b08a52",light:"#d9b47a",dark:"#775c33"}}),
+  mkStage({id:"sea",name:"かいてい",sub:"海・サンゴ・あわ",
+    f:["#5fc3d6","#52b6ca","#3d94a8","#9fe8f2"],
+    h:["#6f8fa8","#9ab6cc","#4a6a80","#33505f"],
+    s:["#e0866f","#f7ac93","#a95a48","#c76e59"],
+    e:["#2f8fa8","#4fb6cc","#1f6b80","#ffd9e8"],
+    m:[".a.a.","aaaaa","aaaaa",".aaa.","..a.."],
+    p:["#d6f6ff","#8fd8e8"],a:"#0e7f96",a2:"#2f5f8f",
+    b:{mortar:"#1f4450",body:"#3f8496",light:"#66b3c4",dark:"#28616f"}}),
+  mkStage({id:"volcano",name:"かざん",sub:"溶岩・黒い岩・けむり",
+    f:["#6b5a55","#5f4f4a","#463935","#8a736b"],
+    h:["#4a4441","#6b625d","#2e2926","#1b1817"],
+    s:["#c46a2f","#e89a55","#7d3a10","#a8551f"],
+    e:["#d94a1f","#ff8a3a","#8f2a0e","#ffd23f"],
+    m:["..a..",".aaa.",".aaa.","aaaaa","a.a.a"],
+    p:["#ffd9c2","#e8927a"],a:"#c23a12",a2:"#7a3f22",
+    b:{mortar:"#231a17",body:"#6b4a3a",light:"#9a705a",dark:"#3f2b22"}}),
+  mkStage({id:"space",name:"うちゅうきち",sub:"宇宙・パネル・星",
+    f:["#3b3f5c","#33374f","#242739","#5b6188"],
+    h:["#5c6690","#8b96c2","#3f4766","#2a2f47"],
+    s:["#7a6fa8","#a396d6","#544a7a","#6b5f96"],
+    e:["#2a2f47","#4a5480","#1a1d2c","#7ce8ff"],
+    m:["a...a",".a.a.","..a..",".a.a.","a...a"],
+    p:["#dfe4ff","#a9b0e0"],a:"#5a63c8",a2:"#2f9fb0",
+    b:{mortar:"#171a28",body:"#3f4666",light:"#626b96",dark:"#262a40"}}),
+  mkStage({id:"candy",name:"おかしのくに",sub:"あまい・カラフル",
+    f:["#ffd6ea","#ffc7e2","#e8a3c6","#fff0f7"],
+    h:["#f2a0c8","#ffc9e2","#c46f9c","#96487a"],
+    s:["#ffe07a","#fff0ad","#c9a53a","#e8c45a"],
+    e:["#e85fa8","#ff8fc4","#b03a7a","#fff0ad"],
+    m:[".aaa.","aa.aa","a...a","aa.aa",".aaa."],
+    p:["#fff0f7","#ffc7e2"],a:"#d63f8f","a2":"#c8761a",
+    b:{mortar:"#7a3f5c",body:"#e88fb8",light:"#ffc2dc",dark:"#a85a80"}}),
+  mkStage({id:"shrine",name:"よるのじんじゃ",sub:"鳥居・森・ちょうちん",
+    f:["#3f5c46","#36523d","#26402d","#5c7a60"],
+    h:["#5a5f6b","#848a99","#3f434d","#2a2d33"],
+    s:["#8a5a3a","#ad7a52","#5e3a22","#7a4a2e"],
+    e:["#c2372f","#e85a4a","#8a1f1a","#ffd98a"],
+    m:["aaaaa","..a..","aaaaa","..a..","..a.."],
+    p:["#dff0e2","#a9c9b0"],a:"#c2372f",a2:"#2f6b3f",
+    b:{mortar:"#1f2a22",body:"#4a5c4a",light:"#6f856f",dark:"#2f3d30"}}),
+  mkStage({id:"cyber",name:"サイバーシティ",sub:"ネオン・回路・夜",
+    f:["#2a2f3f","#242836","#171a24","#3f4658"],
+    h:["#3f4a6b","#6b7aa8","#2a3148","#1a1e2c"],
+    s:["#2f7a8a","#4fb0c4","#1f5560","#276874"],
+    e:["#1a1e2c","#2f3a55","#0f121c","#3ef0d8"],
+    m:["a.a.a",".aaa.","aa.aa",".aaa.","a.a.a"],
+    p:["#e6dcff","#9d8fd6"],a:"#7a3fd0",a2:"#0f9fb8",
+    b:{mortar:"#10131c",body:"#2a3148",light:"#48547a",dark:"#1a1e2c"}})
+]);
 var SP=STAGES[0];
 
 /* ============ dom ============ */
@@ -790,7 +887,7 @@ var G={
   players:[], bombs:[], items:[], blasts:[], parts:[], falls:[], traps:[],
   flame:new Set(), danger:new Float32Array(COLS*ROWS),
   time:ROUND_TIME, round:1, shake:0, mode:null, sd:false, sdIdx:0, sdT:0, sdOrder:[],
-  banner:null, bannerT:0, winnerId:-1, frame:0, stage:STAGES[0]
+  banner:null, bannerT:0, winnerId:-1, frame:0, stage:STAGES[0], story:null, win:WINS_NEEDED, aiSlow:0
 };
 function idx(c,r){ return r*COLS+c; }
 function tileC(p){ return Math.floor(p.x/T); }
@@ -883,7 +980,7 @@ function resetRound(){
 function setPhase(ph,t){ G.phase=ph; G.phaseT=t||0; }
 
 function startMatch(mode,stage){
-  G.mode=mode; G.round=1;
+  G.mode=mode; G.round=1; G.win=(mode&&mode.win)||WINS_NEEDED; G.aiSlow=(mode&&mode.aiSlow)||0;
   G.stage=stage||G.stage||STAGES[0];
   applyStage(G.stage);
   G.players=[];
@@ -1470,7 +1567,7 @@ function aiThink(p,dt){
   var tol=Math.max(1.8,p.speed/60*1.6+0.6);
   var aligned=Math.abs(p.x-cx)<tol&&Math.abs(p.y-cy)<tol;
   if(p.think>0) return;
-  p.think=0.09;
+  p.think=0.09+G.aiSlow;
   var here=idx(c,r);
   var d=G.danger;
   var stepT=T/p.speed;
@@ -1518,7 +1615,7 @@ function aiThink(p,dt){
   if(p.live<p.maxBombs&&p.bombCd<=0){
     var val=tileValue(p,c,r);
     if(val>0&&hasEscape(p,c,r)){
-      placeBomb(p); p.bombCd=0.65;
+      placeBomb(p); p.bombCd=0.65+G.aiSlow*2.2;
       computeDanger();
       var esc=bfs(here,function(nc,nr,depth){ return safeWalk(nc,nr,depth); });
       var eb=-1,ebd=99;
@@ -1722,7 +1819,7 @@ function makeBrickURL(b){
   }
   brick(0,0); brick(16,0);
   brick(-8,8); brick(8,8); brick(24,8);
-  g.fillStyle=b.moss;
+  g.fillStyle=b.moss||b.light;
   g.fillRect(2,6,3,1); g.fillRect(20,6,2,1); g.fillRect(11,14,3,1);
   return c.toDataURL("image/png");
 }
@@ -1762,7 +1859,8 @@ function drawHard(x,y){
     ctx.fillStyle=h[2]; ctx.fillRect(x+9,y+10,3,3);
   } else {
     ctx.fillStyle=h[2]; ctx.fillRect(x+2,y+7,T-4,2);
-    ctx.fillStyle="#f2b705"; ctx.fillRect(x+3,y+3,2,2); ctx.fillRect(x+11,y+11,2,2);
+    ctx.fillStyle=(SP.id==="site")?"#f2b705":h[1];
+    ctx.fillRect(x+3,y+3,2,2); ctx.fillRect(x+11,y+11,2,2);
   }
 }
 function drawSoft(x,y){
@@ -1804,6 +1902,22 @@ function drawEdge(x,y,c,r){
     if(lit===1) ctx.fillRect(x+9,y+5,3,3);
     if(lit===2) ctx.fillRect(x+3,y+10,3,3);
     if(lit===3) ctx.fillRect(x+9,y+10,3,3);
+  } else if(SP.edgeKind==="motif"){
+    ctx.fillStyle=e[2]; ctx.fillRect(x,y,T,T);
+    ctx.fillStyle=e[0]; ctx.fillRect(x+1,y+1,T-2,T-2);
+    ctx.fillStyle=e[1]; ctx.fillRect(x+1,y+1,T-2,2); ctx.fillRect(x+1,y+1,2,T-3);
+    ctx.fillStyle=e[2]; ctx.fillRect(x+1,y+T-3,T-2,2); ctx.fillRect(x+T-3,y+1,2,T-2);
+    var mp=SP.motif;
+    if(mp){
+      var mc=((c*5+r*3)%4===0)?e[3]:e[1];
+      for(var my=0;my<mp.length;my++){
+        for(var mx=0;mx<mp[my].length;mx++){
+          if(mp[my].charAt(mx)==="."){ continue; }
+          ctx.fillStyle=(mp[my].charAt(mx)==="b")?e[2]:mc;
+          ctx.fillRect(x+5+mx,y+5+my,1,1);
+        }
+      }
+    }
   } else {
     ctx.fillStyle=e[2]; ctx.fillRect(x,y,T,T);
     ctx.fillStyle=e[0]; ctx.fillRect(x+1,y+3,T-2,10);
@@ -2035,7 +2149,7 @@ function buildCards(){
       '<div class="stats"><span><b>B</b><u>1</u></span><span><b>F</b><u>1</u></span><span><b>S</b><u>1</u></span></div>'+
       '<div class="badges"></div>';
     var pips=el.querySelector(".pips");
-    for(var k=0;k<WINS_NEEDED;k++){ var s=document.createElement("span"); s.className="pip"; pips.appendChild(s); }
+    for(var k=0;k<G.win;k++){ var s=document.createElement("span"); s.className="pip"; pips.appendChild(s); }
     var embCv=el.querySelector(".emb");
     if(embCv) drawPortrait(embCv.getContext("2d"),0,0,p.cols||uniformCols(p.pal));
     cardsEl.appendChild(el);
@@ -2078,7 +2192,9 @@ function updateCards(force){
   }
 }
 /* shown on the title screen so a screenshot tells us what the device did */
+var DIAG=/[?&]diag=1/.test(location.search);
 function diagText(){
+  if(!DIAG) return "v"+BUILD;
   var rs=getComputedStyle(document.documentElement);
   var doc=document.scrollingElement||document.documentElement;
   var sw=Math.round(document.getElementById("screen").getBoundingClientRect().width);
@@ -2098,7 +2214,8 @@ function updateStatus(){
   var m=Math.floor(t/60), s=t%60;
   timerEl.textContent=m+":"+(s<10?"0":"")+s;
   timerEl.classList.toggle("danger",G.sd);
-  var label=G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+WINS_NEEDED+'</span>')
+  var label=G.story?('第'+(G.story.ch+1)+'章 <span class="sub">R'+G.round+' / '+G.win+'先取</span>')
+    :G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+G.win+'</span>')
     :('READY <span class="sub">'+diagText()+'</span>');
   if(roundEl.__label!==label){ roundEl.innerHTML=label; roundEl.__label=label; }
   var playing=!!G.mode&&G.phase!=="title", changed=false;
@@ -2149,6 +2266,8 @@ function showTitle(){
     '<button class="btn" data-act="solo2">1P VS CPU x2<small>3人バトル。挟み撃ちに注意</small></button>'+
     '<button class="btn" data-act="solo3">1P VS CPU x3<small>4人フルバトル。混戦必至</small></button>'+
     '<button class="btn" data-act="duo">2P + CPU x2<small>1台で2人対戦（矢印キー / WASD）</small></button>'+
+    '<button class="btn" data-act="story">STORY<small>'+
+      (PROG.cleared>=STORY.length?"ぜんぶクリア！":("第"+(PROG.cleared+1)+"章：CPUに勝ち進む"))+'</small></button>'+
     '<button class="btn" data-act="maker">EDIT<small>キャラの いろをえらぶ（100色）</small></button>'+
     '<button class="btn" data-act="friends">FRIENDS<small>あいことばで、友だちと対戦（最大4人）</small></button>'+
     '<button class="btn ghost" data-act="account">'+
@@ -2157,6 +2276,93 @@ function showTitle(){
     "</div>"
   );
 }
+/* ---- story mode ---- */
+var STORY=[
+  {s:0,cpu:1,win:2,ai:0.20,title:"はじまりの谷"},
+  {s:3,cpu:1,win:2,ai:0.16,title:"ゆきやま とっぱ"},
+  {s:1,cpu:2,win:2,ai:0.14,title:"まちなか の 二人組"},
+  {s:4,cpu:2,win:2,ai:0.12,title:"さばくの 追跡"},
+  {s:2,cpu:2,win:3,ai:0.10,title:"こうじ現場 の わな"},
+  {s:5,cpu:3,win:2,ai:0.08,title:"かいてい の 三人衆"},
+  {s:6,cpu:3,win:2,ai:0.06,title:"かざん の 決戦"},
+  {s:7,cpu:3,win:3,ai:0.04,title:"うちゅうきち 潜入"},
+  {s:8,cpu:3,win:3,ai:0.02,title:"おかしのくに の わな"},
+  {s:9,cpu:3,win:3,ai:0,title:"よるのじんじゃ"},
+  {s:10,cpu:3,win:3,ai:0,title:"サイバーシティ 最終決戦"}
+];
+var PROG={cleared:0};
+try{
+  var sp=JSON.parse(localStorage.getItem("bba_prog")||"null");
+  if(sp&&typeof sp.cleared==="number") PROG.cleared=Math.max(0,Math.min(STORY.length,sp.cleared|0));
+}catch(e){}
+function progSave(){
+  try{ localStorage.setItem("bba_prog",JSON.stringify(PROG)); }catch(e){}
+  if(ACC.token&&ACC.profile){
+    api("/api/profile",{method:"POST",body:{profile:{story:PROG.cleared}}})
+      .then(function(j){ ACC.profile=j.profile; }).catch(function(){});
+  }
+}
+function stageUnlocked(i){
+  if(i<3) return true;
+  for(var c=0;c<STORY.length;c++){
+    if(STORY[c].s===i) return PROG.cleared>=c;
+  }
+  return true;
+}
+function colorUnlocked(i){
+  var p=BODY_COLORS[i];
+  return !p||!p.lock||PROG.cleared>=p.lock;
+}
+function showStory(){
+  var html='<h2>ストーリー</h2>'+
+    '<p>CPUに勝ち進むと、ステージと とくべつな色が つかえるようになります。</p><div class="menu grid2">';
+  for(var i=0;i<STORY.length;i++){
+    var done=PROG.cleared>i, next=PROG.cleared===i, lock=PROG.cleared<i;
+    html+='<button class="btn'+(done?" done":"")+(next?" primary":"")+(lock?" locked":"")+'"'+
+      (lock?" disabled":"")+' data-act="ch'+i+'">'+
+      '<b>'+(done?"★":(lock?"🔒":"▶"))+" "+(i+1)+"</b> "+STORY[i].title+
+      '<small>'+STAGES[STORY[i].s].name+' ／ CPU'+STORY[i].cpu+'体 ／ '+STORY[i].win+'ラウンド先取</small></button>';
+  }
+  html+='<button class="btn ghost wide" data-act="modes">&#8592; もどる</button></div>';
+  showOverlay(html);
+}
+function startStory(ch){
+  var st=STORY[ch]; if(!st) return;
+  pendingMode=null;
+  G.story={ch:ch};
+  startMatch({humans:1,total:1+st.cpu,label:"STORY",win:st.win,aiSlow:st.ai||0},STAGES[st.s]);
+}
+function storyWin(){
+  var ch=G.story?G.story.ch:-1;
+  G.story=null;
+  if(ch<0) return;
+  var first=(PROG.cleared===ch);
+  if(first){ PROG.cleared=ch+1; progSave(); }
+  var gained=[];
+  for(var i=0;i<BODY_COLORS.length;i++){
+    if(BODY_COLORS[i].lock&&BODY_COLORS[i].lock===PROG.cleared) gained.push(BODY_COLORS[i].name);
+  }
+  var nxt=STORY[PROG.cleared];
+  showOverlay('<h2>クリア！</h2>'+
+    '<p>'+STORY[ch].title+' を とっぱしました。'+
+    (first&&STORY[ch+1]?'<br>あたらしいステージ「'+STAGES[STORY[ch+1].s].name+'」が つかえます。':'')+
+    (gained.length?'<br>あたらしい色「'+gained.join("・")+'」を てにいれた！':'')+'</p>'+
+    '<div class="menu">'+
+    (nxt?'<button class="btn primary" data-act="ch'+PROG.cleared+'">つぎへ すすむ<small>'+nxt.title+'</small></button>':
+      '<button class="btn primary" data-act="story">ぜんぶ クリア！<small>ストーリーを見る</small></button>')+
+    '<button class="btn" data-act="story">ストーリーの一覧</button>'+
+    '<button class="btn ghost" data-act="title">タイトルへ</button></div>');
+}
+function storyLose(){
+  var ch=G.story?G.story.ch:-1;
+  G.story=null;
+  showOverlay('<h2>まけました…</h2><p>'+(STORY[ch]?STORY[ch].title:"")+' に もう一度 ちょうせんできます。</p>'+
+    '<div class="menu">'+
+    '<button class="btn primary" data-act="ch'+ch+'">もう一度</button>'+
+    '<button class="btn" data-act="story">ストーリーの一覧</button>'+
+    '<button class="btn ghost" data-act="title">タイトルへ</button></div>');
+}
+
 /* ---- friends lobby ---- */
 var lobbyStage=0;
 function showFriends(){
@@ -2199,13 +2405,16 @@ function showLobby(keep){
 }
 var pendingMode=null;
 function showStageSelect(){
-  var html='<h2>ステージをえらぶ</h2><div class="menu">';
+  var html='<h2>ステージをえらぶ</h2><div class="menu grid2">';
   for(var i=0;i<STAGES.length;i++){
-    html+='<button class="btn stagebtn" data-act="stage'+i+'"><b style="color:'+STAGES[i].accent+'">'+STAGES[i].name+'</b>'+
-      '<small>'+STAGES[i].sub+'</small></button>';
+    var ok=stageUnlocked(i);
+    html+='<button class="btn stagebtn'+(ok?"":" locked")+'"'+(ok?"":" disabled")+
+      ' data-act="stage'+i+'"><b style="color:'+(ok?STAGES[i].accent:"#8a8f98")+'">'+
+      (ok?"":"🔒 ")+STAGES[i].name+'</b><small>'+
+      (ok?STAGES[i].sub:"ストーリーで かいほう")+'</small></button>';
   }
-  html+='<button class="btn" data-act="stageR">おまかせ<small>ランダムで決まる</small></button>'+
-    '<button class="btn ghost" data-act="modes">&#8592; モードをえらびなおす</button></div>';
+  html+='<button class="btn wide" data-act="stageR">おまかせ<small>つかえるステージから ランダム</small></button>'+
+    '<button class="btn ghost wide" data-act="modes">&#8592; モードをえらびなおす</button></div>';
   showOverlay(html);
 }
 function alertLine(msg){
@@ -2249,6 +2458,7 @@ function showPause(){
 }
 function showMatchEnd(){
   var w=G.players[G.winnerId];
+  if(G.story){ if(w&&w.id===0) storyWin(); else storyLose(); return; }
   showOverlay('<h2>'+(w?w.label+" "+w.pal.name+" が優勝！":"引き分け")+'</h2>'+
     '<p>'+G.round+'ラウンドの死闘。'+(w?w.wins+"勝で決着しました。":"")+'</p><div class="menu">'+
     '<button class="btn primary" data-act="again">REMATCH<small>同じルールでもう一度</small></button>'+
@@ -2271,6 +2481,8 @@ function onOverlayClick(act){
   if(MODES[act]){ pendingMode=MODES[act]; showStageSelect(); return; }
   if(act==="modes"){ showTitle(); return; }
   if(act==="maker"){ openMaker(); return; }
+  if(act==="story"){ showStory(); return; }
+  if(act&&/^ch\d+$/.test(act)){ startStory(parseInt(act.slice(2),10)); return; }
   if(act==="friends"){ showFriends(); return; }
   if(act==="mkroom"){
     showOverlay('<h2>へやを つくっています…</h2><p>すこし まってください。</p>');
@@ -2288,14 +2500,22 @@ function onOverlayClick(act){
   if(act==="account"){ if(ACC.profile) openMaker(); else openLogin(); return; }
   if(act&&act.indexOf("stage")===0){
     var st;
-    if(act==="stageR") st=STAGES[(Math.random()*STAGES.length)|0];
-    else st=STAGES[parseInt(act.slice(5),10)]||STAGES[0];
+    if(act==="stageR"){
+      var pool=[];
+      for(var si=0;si<STAGES.length;si++) if(stageUnlocked(si)) pool.push(STAGES[si]);
+      st=pool[(Math.random()*pool.length)|0]||STAGES[0];
+    }
+    else {
+      var sn=parseInt(act.slice(5),10);
+      if(!(sn>=0)||!stageUnlocked(sn)) return;
+      st=STAGES[sn]||STAGES[0];
+    }
     startMatch(pendingMode||MODES.solo1,st);
     return;
   }
   if(act==="resume") togglePause();
   else if(act==="title"){
-    stopMusic(); prevPhase=null; btnPause.textContent="PAUSE";
+    stopMusic(); prevPhase=null; G.story=null; btnPause.textContent="PAUSE";
     showTitle(); setPhase("title",0);
   }
   else if(act==="again"){ startMatch(G.mode); }
@@ -2387,7 +2607,7 @@ function update(dt){
     updateBombs(dt);
     if(G.phaseT<=0){
       var champ=null;
-      for(i=0;i<G.players.length;i++) if(G.players[i].wins>=WINS_NEEDED) champ=G.players[i];
+      for(i=0;i<G.players.length;i++) if(G.players[i].wins>=G.win) champ=G.players[i];
       if(champ){
         G.winnerId=champ.id; setPhase("matchend",0); stopMusic();
         if(NET.role==="host"&&NET.started){
@@ -2467,10 +2687,21 @@ function saveToken(t){
 function accBoot(){
   if(!ACC.token) return;
   api("/api/profile").then(function(j){
-    ACC.profile=j.profile; refreshAccount();
+    ACC.profile=j.profile; mergeStory(); refreshAccount();
   }).catch(function(err){
     if(err&&err.error==="auth"||err&&err.error==="gone") saveToken("");
   });
+}
+function mergeStory(){
+  if(!ACC.profile) return;
+  var remote=ACC.profile.story|0;
+  if(remote>PROG.cleared){
+    PROG.cleared=Math.min(STORY.length,remote);
+    try{ localStorage.setItem("bba_prog",JSON.stringify(PROG)); }catch(e){}
+  } else if(PROG.cleared>remote){
+    api("/api/profile",{method:"POST",body:{profile:{story:PROG.cleared}}})
+      .then(function(j){ ACC.profile=j.profile; }).catch(function(){});
+  }
 }
 function refreshAccount(){
   if(G.phase==="title"&&!overlay.hidden) showTitle();
@@ -2510,7 +2741,7 @@ function openLogin(){
     if(pw.length<4){ err.textContent="あいことばは4文字いじょうにしてください。"; return; }
     ACC.busy=true; err.textContent="つうしん中…";
     api("/api/auth",{method:"POST",body:{action:action,id:id,pw:pw,name:id}}).then(function(j){
-      ACC.busy=false; saveToken(j.token); ACC.profile=j.profile;
+      ACC.busy=false; saveToken(j.token); ACC.profile=j.profile; mergeStory();
       SFX.item(); closeModal(); refreshAccount();
     }).catch(function(e2){
       ACC.busy=false; err.textContent=(e2&&e2.message)||"うまくいきませんでした。";
@@ -2530,9 +2761,14 @@ function openMaker(){
   if(guest) p={id:"",name:"",stats:null};
   modalEl.hidden=false;
   var sw="";
+  var openCols=0;
   for(var i=0;i<BODY_COLORS.length;i++){
-    sw+='<button class="swatch" data-color="'+i+'" type="button" '+
-      'style="background:'+BODY_COLORS[i].body+'" title="'+BODY_COLORS[i].name+'" aria-label="'+BODY_COLORS[i].name+'"></button>';
+    var free=colorUnlocked(i);
+    if(free) openCols++;
+    sw+='<button class="swatch'+(free?"":" locked")+'" data-color="'+i+'" type="button"'+
+      (free?"":' disabled')+' style="background:'+(free?BODY_COLORS[i].body:"#9aa0aa")+
+      '" title="'+(free?BODY_COLORS[i].name:"ストーリー第"+BODY_COLORS[i].lock+"章クリアで かいほう")+
+      '" aria-label="'+BODY_COLORS[i].name+'">'+(free?"":"🔒")+'</button>';
   }
   sw='<div class="palette" id="pfPalette">'+sw+'</div>';
   var tabs="";
@@ -2558,7 +2794,7 @@ function openMaker(){
       palOf(lk.face).name+'</b></label>'+sw+
       '<div class="row2"><button class="btn ghost" id="pfRand" type="button">ランダム</button>'+
       '<button class="btn ghost" id="pfAll" type="button">ぜんぶ同じ色</button>'+
-      '<span class="hint">'+BODY_COLORS.length+'色</span></div></div>'+
+      '<span class="hint">'+openCols+' / '+BODY_COLORS.length+'色</span></div></div>'+
     (guest ? '' :
       '<div class="statgrid">'+
       '<div><span>あそんだ回数</span><b>'+(st.matches|0)+'</b></div>'+
@@ -2604,7 +2840,9 @@ function openMaker(){
     drawPreview();
   }
   function selectColor(idx,scroll){
-    pick[part]=Math.max(0,Math.min(BODY_COLORS.length-1,idx));
+    idx=Math.max(0,Math.min(BODY_COLORS.length-1,idx|0));
+    if(!colorUnlocked(idx)) return;
+    pick[part]=idx;
     refreshPalette(scroll);
   }
   sheetEl.querySelectorAll("[data-color]").forEach(function(b){
@@ -2614,7 +2852,11 @@ function openMaker(){
     b.onclick=function(){ part=b.getAttribute("data-part"); refreshPalette(true); };
   });
   var randBtn=document.getElementById("pfRand");
-  if(randBtn) randBtn.onclick=function(){ selectColor((Math.random()*BODY_COLORS.length)|0,true); };
+  if(randBtn) randBtn.onclick=function(){
+    var pool=[];
+    for(var z=0;z<BODY_COLORS.length;z++) if(colorUnlocked(z)) pool.push(z);
+    selectColor(pool[(Math.random()*pool.length)|0]|0,true);
+  };
   var allBtn=document.getElementById("pfAll");
   if(allBtn) allBtn.onclick=function(){
     var c=pick[part];
@@ -2657,9 +2899,7 @@ var NET={
   poll:null, tick:null, lastSnap:0, myName:"", started:false, err:"",
   blastCount:0, aliveWas:[]
 };
-window.__net=function(){ return NET; };
-window.__netlog=[];
-function netLog(m){ window.__netlog.push(m); if(window.__netlog.length>40) window.__netlog.shift(); }
+function netLog(){}
 function netApi(body){
   return fetch(API+"/api/room",{
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)
@@ -2972,6 +3212,7 @@ function hostSendSnapshot(){
 }
 function applySnapshot(s){
   if(!G.players.length) return;
+  NET.snaps=(NET.snaps||0)+1; NET.lastSnap=Date.now();
   G.phase=s.ph; G.time=s.t/10; G.round=s.rd; G.sd=!!s.sd;
   G.banner=s.bn||null; G.bannerT=s.bt/10;
   for(var i=0;i<s.g.length&&i<G.grid.length;i++) G.grid[i]=s.g.charCodeAt(i)-48;
