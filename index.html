@@ -245,6 +245,20 @@
   body.tinyscreen .btn small{display:none}
   body.tinyscreen .btn{padding:7px 10px}
   body.tinyscreen .menu{gap:6px}
+  .overlay .code{
+    font-family:var(--pix);letter-spacing:.25em;color:var(--flare);
+    background:#fff;border:2px solid var(--edge);padding:2px 8px;
+  }
+  .lobby{display:flex;flex-direction:column;gap:4px;width:min(330px,100%)}
+  .lobbyrow{
+    display:flex;align-items:center;gap:8px;font-size:12px;
+    background:var(--panel-2);border:2px solid var(--edge);padding:4px 8px;text-align:left;
+  }
+  .lobbyrow b{font-family:var(--pix);font-size:10px;color:var(--accent);font-weight:400}
+  .lobbyrow span{margin-left:auto;font-family:var(--pix);font-size:9px}
+  .lobbyrow .ok{color:var(--accent)}
+  .lobbyrow .wait{color:var(--muted)}
+  .btn[disabled]{opacity:.45;cursor:default}
   body.minimal .cards{display:none}
   .btn{
     font-family:var(--pix);font-size:12px;letter-spacing:.04em;
@@ -2094,7 +2108,10 @@ function updateStatus(){
 }
 
 /* ============ overlays ============ */
-function hideOverlay(){ overlay.hidden=true; overlay.innerHTML=""; overlay.className="overlay"; }
+function hideOverlay(){
+  overlay.hidden=true; overlay.innerHTML=""; overlay.className="overlay";
+  overlay.removeAttribute("data-lobby");
+}
 /* keep menus inside the screen frame instead of letting them scroll */
 function fitOverlay(){
   if(overlay.hidden) return;
@@ -2108,6 +2125,7 @@ function fitOverlay(){
 function showOverlay(html){
   overlay.hidden=false;
   overlay.className="overlay";
+  overlay.removeAttribute("data-lobby");
   overlay.innerHTML=html;
   Array.prototype.forEach.call(overlay.querySelectorAll("button"),function(b){
     b.addEventListener("click",function(){ SFX.ui(); onOverlayClick(b.getAttribute("data-act")); });
@@ -2131,12 +2149,53 @@ function showTitle(){
     '<button class="btn" data-act="solo2">1P VS CPU x2<small>3人バトル。挟み撃ちに注意</small></button>'+
     '<button class="btn" data-act="solo3">1P VS CPU x3<small>4人フルバトル。混戦必至</small></button>'+
     '<button class="btn" data-act="duo">2P + CPU x2<small>1台で2人対戦（矢印キー / WASD）</small></button>'+
-    '<button class="btn" data-act="maker">EDIT<small>キャラの いろをえらぶ（20色）</small></button>'+
+    '<button class="btn" data-act="maker">EDIT<small>キャラの いろをえらぶ（100色）</small></button>'+
+    '<button class="btn" data-act="friends">FRIENDS<small>あいことばで、友だちと対戦（最大4人）</small></button>'+
     '<button class="btn ghost" data-act="account">'+
       (ACC.profile?("★ "+ACC.profile.name+" でログイン中"):"ログイン / とうろく（メール不要）")+
     '</button>'+
     "</div>"
   );
+}
+/* ---- friends lobby ---- */
+var lobbyStage=0;
+function showFriends(){
+  showOverlay('<h2>FRIENDS</h2>'+
+    '<p>あいことばを つたえあって、友だちと対戦できます（最大4人）。</p>'+
+    '<div class="menu">'+
+    '<button class="btn primary" data-act="mkroom">へやをつくる<small>あいことばが出ます。友だちに教えてください</small></button>'+
+    '<button class="btn" data-act="joinroom">へやに入る<small>もらったあいことばを入力します</small></button>'+
+    '<button class="btn ghost" data-act="modes">&#8592; もどる</button></div>');
+}
+function refreshLobby(){
+  if(overlay.hidden||!NET.role||NET.started) return;
+  if(overlay.getAttribute("data-lobby")!=="1") return;
+  showLobby(true);
+}
+function showLobby(keep){
+  var mem=netMembers();
+  var list="";
+  for(var i=0;i<mem.length;i++){
+    var ok=(mem[i].slot==="host")||(NET.role==="host"?!!(NET.dcs[mem[i].slot]&&NET.dcs[mem[i].slot].readyState==="open"):true);
+    list+='<div class="lobbyrow"><b>'+(i+1)+'</b>'+mem[i].name+
+      '<span class="'+(ok?"ok":"wait")+'">'+(ok?"OK":"接続中…")+'</span></div>';
+  }
+  var connected=(NET.role==="guest")?(NET.dcs.host&&NET.dcs.host.readyState==="open"):
+    Object.keys(NET.dcs).filter(function(k){ return NET.dcs[k].readyState==="open"; }).length>0;
+  var html='<h2>'+(NET.role==="host"?"あいことば　":"へや　")+'<span class="code">'+NET.code+'</span></h2>'+
+    (NET.role==="host"
+      ? '<p>この4文字を友だちに おしえてください。全員そろったら「はじめる」。</p>'
+      : '<p>'+(connected?"ホストが はじめるのを まっています。":"つないでいます…")+'</p>')+
+    '<div class="lobby">'+list+'</div>'+
+    (NET.err?'<p class="err">'+NET.err+'</p>':'')+
+    '<div class="menu">'+
+    (NET.role==="host"
+      ? '<button class="btn" data-act="lobstage">ステージ：'+STAGES[lobbyStage].name+'</button>'+
+        '<button class="btn primary" data-act="lobstart"'+(connected?"":" disabled")+'>はじめる</button>'
+      : '')+
+    '<button class="btn ghost" data-act="lobquit">やめる</button></div>';
+  showOverlay(html);
+  overlay.setAttribute("data-lobby","1");
 }
 var pendingMode=null;
 function showStageSelect(){
@@ -2148,6 +2207,40 @@ function showStageSelect(){
   html+='<button class="btn" data-act="stageR">おまかせ<small>ランダムで決まる</small></button>'+
     '<button class="btn ghost" data-act="modes">&#8592; モードをえらびなおす</button></div>';
   showOverlay(html);
+}
+function alertLine(msg){
+  var p=overlay.querySelector(".err");
+  if(p){ p.textContent=msg; return; }
+  var d=document.createElement("p"); d.className="err"; d.textContent=msg;
+  overlay.insertBefore(d,overlay.firstChild.nextSibling);
+  fitOverlay();
+}
+function openJoinRoom(){
+  modalEl.hidden=false;
+  sheetEl.innerHTML=
+    '<h2>へやに入る</h2>'+
+    '<p class="hint">友だちからもらった4文字を入れてください。</p>'+
+    '<div class="field"><label for="rmCode">あいことば</label>'+
+    '<input id="rmCode" type="text" maxlength="4" autocapitalize="characters" '+
+    'autocomplete="off" spellcheck="false" placeholder="れい：K7QP" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--pix)"></div>'+
+    '<p class="err" id="rmErr"></p>'+
+    '<div class="row"><button class="btn primary" id="rmGo" type="button">入る</button>'+
+    '<button class="btn" id="rmClose" type="button">とじる</button></div>';
+  var inp=document.getElementById("rmCode"), err=document.getElementById("rmErr");
+  function go(){
+    var code=(inp.value||"").toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,"");
+    if(code.length!==4){ err.textContent="4文字を入れてください。"; return; }
+    err.textContent="つないでいます…";
+    guestJoinRoom(code).then(function(){
+      closeModal(); showLobby();
+    }).catch(function(e){
+      err.textContent=(e&&e.message)||"入れませんでした。";
+    });
+  }
+  document.getElementById("rmGo").onclick=go;
+  document.getElementById("rmClose").onclick=closeModal;
+  inp.addEventListener("keydown",function(e){ if(e.key==="Enter") go(); });
+  setTimeout(function(){ inp.focus(); },30);
 }
 function showPause(){
   showOverlay('<h2>PAUSE</h2><p>Pキーまたは下のボタンで再開します。</p><div class="menu">'+
@@ -2178,6 +2271,20 @@ function onOverlayClick(act){
   if(MODES[act]){ pendingMode=MODES[act]; showStageSelect(); return; }
   if(act==="modes"){ showTitle(); return; }
   if(act==="maker"){ openMaker(); return; }
+  if(act==="friends"){ showFriends(); return; }
+  if(act==="mkroom"){
+    showOverlay('<h2>へやを つくっています…</h2><p>すこし まってください。</p>');
+    hostCreateRoom().then(function(){ showLobby(); })
+      .catch(function(e){ showFriends(); alertLine(e&&e.message||"へやを つくれませんでした。"); });
+    return;
+  }
+  if(act==="joinroom"){ openJoinRoom(); return; }
+  if(act==="lobstage"){ lobbyStage=(lobbyStage+1)%STAGES.length; showLobby(); return; }
+  if(act==="lobstart"){ hostStartMatch(STAGES[lobbyStage]); return; }
+  if(act==="lobquit"){
+    if(NET.code&&NET.role==="host") netApi({action:"close",code:NET.code}).catch(function(){});
+    netReset(); showTitle(); return;
+  }
   if(act==="account"){ if(ACC.profile) openMaker(); else openLogin(); return; }
   if(act&&act.indexOf("stage")===0){
     var st;
@@ -2229,6 +2336,12 @@ function update(dt){
   if(G.shake>0) G.shake=Math.max(0,G.shake-dt*9);
   if(G.bannerT>0) G.bannerT-=dt;
   updateParts(dt);
+  if(NET.role==="guest"&&NET.started){
+    /* the host owns the simulation; we draw what it sends us */
+    updateStatus();
+    if(G.frame%5===0) updateCards(false);
+    return;
+  }
   for(var i=G.blasts.length-1;i>=0;i--){
     G.blasts[i].life-=dt;
     if(G.blasts[i].life<=0) G.blasts.splice(i,1);
@@ -2255,7 +2368,9 @@ function update(dt){
       if(!p.alive) continue;
       if(p.invul>0) p.invul-=dt;
       if(p.hop){ updateHop(p,dt); pickup(p); continue; }
-      if(p.isAI) aiThink(p,dt); else readHuman(p);
+      if(p.isAI) aiThink(p,dt);
+      else if(p.ni) applyNetInput(p);
+      else readHuman(p);
       movePlayer(p,dt);
       pickup(p);
     }
@@ -2275,6 +2390,11 @@ function update(dt){
       for(i=0;i<G.players.length;i++) if(G.players[i].wins>=WINS_NEEDED) champ=G.players[i];
       if(champ){
         G.winnerId=champ.id; setPhase("matchend",0); stopMusic();
+        if(NET.role==="host"&&NET.started){
+          netBroadcast({end:{w:champ.id}});
+          NET.started=false;
+          if(NET.tick){ clearInterval(NET.tick); NET.tick=null; }
+        }
         if(G.players[0]&&!G.players[0].isAI){
           pushStats({matches:1,matchWins:champ.id===0?1:0,rounds:G.round,roundWins:G.players[0].wins});
         }
@@ -2525,6 +2645,385 @@ function openMaker(){
   };
   var inBtn=document.getElementById("pfIn");
   if(inBtn) inBtn.onclick=function(){ openLogin(); };
+}
+
+/* ============ friend matches (peer to peer) ============ */
+var DIR_N=["down","left","right","up"];
+var DIR_I={down:0,left:1,right:2,up:3};
+var KIND_N=["c","a","t","s"];
+var KIND_I={c:0,a:1,t:2,s:3};
+var NET={
+  role:null, code:"", slot:"", pcs:{}, dcs:{}, members:{},
+  poll:null, tick:null, lastSnap:0, myName:"", started:false, err:"",
+  blastCount:0, aliveWas:[]
+};
+window.__net=function(){ return NET; };
+window.__netlog=[];
+function netLog(m){ window.__netlog.push(m); if(window.__netlog.length>40) window.__netlog.shift(); }
+function netApi(body){
+  return fetch(API+"/api/room",{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)
+  }).then(function(r){
+    return r.text().then(function(t){
+      var j={}; try{ j=JSON.parse(t); }catch(e){}
+      if(!r.ok) throw j&&j.message?j:{message:"つうしんに しっぱいしました。"};
+      return j;
+    });
+  });
+}
+function netName(){
+  return (ACC.profile&&ACC.profile.name)||"プレイヤー";
+}
+function rtcConfig(){
+  return {iceServers:[{urls:["stun:stun.l.google.com:19302","stun:global.stun.twilio.com:3478"]}]};
+}
+function netReset(){
+  if(NET.poll){ clearInterval(NET.poll); NET.poll=null; }
+  if(NET.tick){ clearInterval(NET.tick); NET.tick=null; }
+  for(var k in NET.pcs){ try{ NET.pcs[k].close(); }catch(e){} }
+  NET={role:null,code:"",slot:"",pcs:{},dcs:{},members:{},poll:null,tick:null,
+       lastSnap:0,myName:"",started:false,err:"",blastCount:0,aliveWas:[]};
+}
+function netMembers(){
+  var out=[{slot:"host",name:NET.members.host||"ホスト",ready:true}];
+  for(var i=1;i<=3;i++){
+    var s="g"+i;
+    if(NET.members[s]) out.push({slot:s,name:NET.members[s],ready:!!(NET.dcs[s]&&NET.dcs[s].readyState==="open")||NET.role==="guest"});
+  }
+  return out;
+}
+/* ICE candidates arrive in bursts; batch them into one write */
+var iceQueue={who:"",list:[],timer:null};
+function queueIce(who,cand){
+  iceQueue.who=who; iceQueue.list.push(cand);
+  if(iceQueue.timer) return;
+  iceQueue.timer=setTimeout(function(){
+    var send=iceQueue.list.splice(0,iceQueue.list.length);
+    iceQueue.timer=null;
+    if(!send.length||!NET.code) return;
+    netApi({action:"post",code:NET.code,who:iceQueue.who,addIce:send,data:{}}).catch(function(){});
+  },700);
+}
+function netStopPolling(){
+  if(NET.poll){ clearInterval(NET.poll); NET.poll=null; }
+}
+function netAllConnected(){
+  if(NET.role==="guest") return !!(NET.dcs.host&&NET.dcs.host.readyState==="open");
+  var want=0,got=0;
+  for(var i=1;i<=3;i++){
+    var s="g"+i;
+    if(NET.members[s]){ want++; if(NET.dcs[s]&&NET.dcs[s].readyState==="open") got++; }
+  }
+  return want>0&&want===got;
+}
+function netSend(dc,obj){
+  try{ if(dc&&dc.readyState==="open") dc.send(JSON.stringify(obj)); }catch(e){}
+}
+function netBroadcast(obj){
+  for(var k in NET.dcs) netSend(NET.dcs[k],obj);
+}
+
+/* ---- host ---- */
+function hostCreateRoom(){
+  netReset();
+  NET.role="host"; NET.myName=netName();
+  return netApi({action:"create",name:NET.myName}).then(function(j){
+    NET.code=j.code;
+    NET.members.host=NET.myName;
+    NET.poll=setInterval(hostPoll,2200);
+    hostPoll();
+    return j.code;
+  });
+}
+function hostPoll(){
+  if(NET.role!=="host"||!NET.code) return;
+  netApi({action:"poll",code:NET.code}).then(function(j){
+    var slots=j.slots||{};
+    var myIce=[];
+    for(var i=1;i<=3;i++){
+      var s="g"+i, g=slots[s];
+      if(!g) continue;
+      if(!NET.members[s]){ NET.members[s]=g.name||"プレイヤー"; refreshLobby(); }
+      if(g.offer&&!NET.pcs[s]) hostAnswer(s,g.offer);
+      if(g.ice&&g.ice.length&&NET.pcs[s]){
+        var seen=NET.pcs[s]._seen||0;
+        for(var k=seen;k<g.ice.length;k++){
+          try{ NET.pcs[s].addIceCandidate(g.ice[k]); }catch(e){}
+        }
+        NET.pcs[s]._seen=g.ice.length;
+      }
+    }
+  }).catch(function(){});
+}
+function hostAnswer(slot,offer){
+  var pc=new RTCPeerConnection(rtcConfig());
+  NET.pcs[slot]=pc; pc._seen=0;
+  pc.onicecandidate=function(e){
+    if(e.candidate) queueIce("host",{to:slot,c:e.candidate.toJSON?e.candidate.toJSON():e.candidate});
+  };
+  pc.ondatachannel=function(e){ hostBindChannel(slot,e.channel); };
+  pc.onconnectionstatechange=function(){
+    if(pc.connectionState==="failed"||pc.connectionState==="disconnected") netDrop(slot);
+    refreshLobby();
+  };
+  netLog("answer:start "+slot);
+  pc.setRemoteDescription(offer).then(function(){
+    netLog("answer:remoteset");
+    return pc.createAnswer();
+  }).then(function(ans){
+    netLog("answer:created");
+    return pc.setLocalDescription(ans);
+  }).then(function(){
+    NET.answers=NET.answers||{};
+    NET.answers[slot]=pc.localDescription.toJSON?pc.localDescription.toJSON():{type:pc.localDescription.type,sdp:pc.localDescription.sdp};
+    netLog("answer:localset");
+    return netApi({action:"post",code:NET.code,who:"host",data:{answers:NET.answers}});
+  }).then(function(){
+    netLog("answer:posted "+slot);
+  }).catch(function(e){ netLog("answer:ERR "+(e&&(e.message||e.name)||e)); });
+}
+function hostBindChannel(slot,dc){
+  NET.dcs[slot]=dc;
+  dc.onopen=function(){ if(netAllConnected()) netStopPolling(); refreshLobby(); };
+  dc.onclose=function(){ netDrop(slot); };
+  dc.onmessage=function(e){
+    var m={}; try{ m=JSON.parse(e.data); }catch(err){ return; }
+    if(m.i){
+      var idx=parseInt(slot.slice(1),10);
+      var p=G.players[idx];
+      if(p) p.ni=m.i;
+    }
+  };
+}
+function netDrop(slot){
+  if(NET.dcs[slot]){ try{ NET.dcs[slot].close(); }catch(e){} delete NET.dcs[slot]; }
+  if(NET.pcs[slot]){ try{ NET.pcs[slot].close(); }catch(e){} delete NET.pcs[slot]; }
+  if(NET.role==="host"&&NET.started){
+    var idx=parseInt(slot.slice(1),10);
+    var p=G.players[idx];
+    if(p){ p.isAI=true; p.ni=null; }
+  } else if(NET.role==="host"){
+    delete NET.members[slot];
+  }
+  refreshLobby();
+}
+
+/* ---- guest ---- */
+function guestJoinRoom(code){
+  netReset();
+  NET.role="guest"; NET.myName=netName(); NET.code=code;
+  return netApi({action:"join",code:code,name:NET.myName}).then(function(j){
+    NET.slot=j.slot;
+    NET.members.host=(j.host&&j.host.name)||"ホスト";
+    NET.members[j.slot]=NET.myName;
+    var pc=new RTCPeerConnection(rtcConfig());
+    NET.pcs.host=pc; pc._seen=0;
+    var dc=pc.createDataChannel("game",{ordered:true});
+    guestBindChannel(dc);
+    pc.onicecandidate=function(e){
+      if(e.candidate) queueIce(NET.slot,e.candidate.toJSON?e.candidate.toJSON():e.candidate);
+    };
+    pc.onconnectionstatechange=function(){
+      if(pc.connectionState==="failed"){ NET.err="つながりませんでした。同じWi-Fiでもう一度ためすか、中継方式に変えてください。"; }
+      refreshLobby();
+    };
+    return pc.createOffer().then(function(o){ return pc.setLocalDescription(o); }).then(function(){
+      return netApi({action:"post",code:code,who:NET.slot,data:{offer:pc.localDescription,name:NET.myName}});
+    }).then(function(){
+      NET.poll=setInterval(guestPoll,2200);
+      guestPoll();
+      return j;
+    });
+  });
+}
+function guestPoll(){
+  if(NET.role!=="guest"||!NET.code) return;
+  netApi({action:"poll",code:NET.code}).then(function(j){
+    var slots=j.slots||{}, host=slots.host, pc=NET.pcs.host;
+    if(!host||!pc) return;
+    NET.members.host=host.name||"ホスト";
+    for(var i=1;i<=3;i++){ var s="g"+i; if(slots[s]) NET.members[s]=slots[s].name||"プレイヤー"; }
+    if(host.answers&&host.answers[NET.slot]&&!pc.currentRemoteDescription){
+      pc.setRemoteDescription(host.answers[NET.slot]).catch(function(){});
+    }
+    if(host.ice&&host.ice.length){
+      for(var k=pc._seen||0;k<host.ice.length;k++){
+        var it=host.ice[k];
+        if(it&&it.to===NET.slot&&it.c){ try{ pc.addIceCandidate(it.c); }catch(e){} }
+      }
+      pc._seen=host.ice.length;
+    }
+    refreshLobby();
+  }).catch(function(){});
+}
+function guestBindChannel(dc){
+  NET.dcs.host=dc;
+  dc.onopen=function(){
+    netStopPolling();
+    refreshLobby();
+    if(NET.tick) clearInterval(NET.tick);
+    NET.tick=setInterval(guestSendInput,50);
+  };
+  dc.onclose=function(){
+    NET.err="ホストとの接続が切れました。";
+    refreshLobby();
+  };
+  dc.onmessage=function(e){
+    var m={}; try{ m=JSON.parse(e.data); }catch(err){ return; }
+    if(m.start) guestStart(m.start);
+    else if(m.s) applySnapshot(m.s);
+    else if(m.end){ NET.started=false; setPhase("matchend",0); G.winnerId=m.end.w; showMatchEnd(); }
+  };
+}
+function guestSendInput(){
+  if(NET.role!=="guest"||!NET.started) return;
+  var m=HUMAN_KEYS[0], dx=0,dy=0;
+  var up=keys[m.up]||pad.up, dn=keys[m.down]||pad.down, lf=keys[m.left]||pad.left, rt=keys[m.right]||pad.right;
+  if(lf) dx=-1; else if(rt) dx=1;
+  if(up) dy=-1; else if(dn) dy=1;
+  if(dx&&dy) dy=0;
+  var inp=[dx,dy,(keys[m.bomb]||pad.bomb)?1:0,(keys[m.skill]||pad.skill)?1:0,
+           (keys[m.item]||pad.item)?1:0,(keys[m.det]||pad.det)?1:0];
+  netSend(NET.dcs.host,{i:inp});
+}
+
+/* ---- match sync ---- */
+function netLooks(){
+  var lk=currentLook();
+  return [lk.face,lk.body,lk.arms,lk.legs,lk.eyes];
+}
+function hostStartMatch(stage){
+  var members=netMembers().filter(function(m){ return m.slot==="host"||NET.dcs[m.slot]; });
+  var total=Math.max(2,members.length);
+  var mode={humans:members.length,total:total,label:"FRIENDS"};
+  NET.started=true;
+  netApi({action:"post",code:NET.code,who:"host",data:{open:false}}).catch(function(){});
+  startMatch(mode,stage);
+  var setup={stage:STAGES.indexOf(G.stage),names:[],looks:[],you:0,total:total};
+  for(var i=0;i<G.players.length;i++){
+    var p=G.players[i];
+    if(i===0){ p.isAI=false; p.label=NET.myName; }
+    else {
+      var slot="g"+i;
+      if(NET.dcs[slot]){ p.isAI=false; p.ni=[0,0,0,0,0,0]; p.label=NET.members[slot]||("P"+(i+1)); }
+      else { p.isAI=true; p.label="CPU"; }
+    }
+    setup.names.push(p.label);
+    setup.looks.push([p.cols.face.key,p.cols.body.key,p.cols.arms.key,p.cols.legs.key,p.cols.eyes.key]);
+  }
+  buildCards();
+  for(var s in NET.dcs){
+    var copy=Object.assign({},setup,{you:parseInt(s.slice(1),10)});
+    netSend(NET.dcs[s],{start:copy});
+  }
+  if(NET.tick) clearInterval(NET.tick);
+  NET.tick=setInterval(hostSendSnapshot,66);
+}
+function guestStart(setup){
+  NET.started=true;
+  var stage=STAGES[Math.max(0,Math.min(STAGES.length-1,setup.stage|0))];
+  startMatch({humans:1,total:setup.total,label:"FRIENDS"},stage);
+  for(var i=0;i<G.players.length;i++){
+    var p=G.players[i];
+    p.isAI=false;
+    p.label=setup.names[i]||("P"+(i+1));
+    var lk=setup.looks&&setup.looks[i];
+    if(lk){
+      function byKey(k){ for(var z=0;z<BODY_COLORS.length;z++) if(BODY_COLORS[z].key===k) return BODY_COLORS[z]; return BODY_COLORS[0]; }
+      p.cols={face:byKey(lk[0]),body:byKey(lk[1]),arms:byKey(lk[2]),legs:byKey(lk[3]),eyes:byKey(lk[4])};
+      p.pal=p.cols.face;
+    }
+  }
+  NET.you=setup.you|0;
+  buildCards();
+  hideOverlay();
+}
+function gridString(){
+  var s=""; for(var i=0;i<G.grid.length;i++) s+=G.grid[i];
+  return s;
+}
+function hostSendSnapshot(){
+  if(NET.role!=="host"||!NET.started) return;
+  var s={
+    ph:G.phase, t:Math.round(G.time*10), rd:G.round, sd:G.sd?1:0,
+    bn:G.banner||"", bt:Math.round((G.bannerT||0)*10),
+    g:gridString(),
+    p:G.players.map(function(p){
+      return [Math.round(p.x*2),Math.round(p.y*2),DIR_I[p.dir]|0,p.alive?1:0,Math.round(p.deadT*10),
+        p.wins,p.fire,p.maxBombs,Math.round(p.speed),
+        (p.kick?1:0)|(p.pierce?2:0)|(p.remote?4:0)|(p.pig?8:0)|(p.invul>0?16:0)|(p.walking?32:0),
+        p.hop?Math.round(p.hop.arc):0, p.sel|0,
+        (p.bag||[]).map(function(sl){ return [ITEM_TYPES.indexOf(sl.type),sl.n]; })];
+    }),
+    b:G.bombs.filter(function(b){return !b.done;}).map(function(b){
+      return [b.c,b.r,Math.round(b.timer*10),b.fire,b.remote?1:0,b.pierce?1:0,Math.round(b.t*10)];
+    }),
+    it:G.items.map(function(i){ return [i.c,i.r,ITEM_TYPES.indexOf(i.type)]; }),
+    tr:G.traps.map(function(t){ return [t.c,t.r,t.dx,t.dy,Math.round(t.t*10)]; }),
+    bl:G.blasts.map(function(x){
+      return [Math.round(x.life*100),x.cells.map(function(c){ return [c.c,c.r,KIND_I[c.k]|0,c.dx|0,c.dy|0]; })];
+    }),
+    fl:G.falls.map(function(f){ return [f.c,f.r,Math.round(f.t*10)]; }),
+    dp:G.players.map(function(p){
+      return p.deployed?[p.deployed.c,p.deployed.r,ITEM_TYPES.indexOf(p.deployed.type),p.deployed.dx,p.deployed.dy]:0;
+    })
+  };
+  netBroadcast({s:s});
+}
+function applySnapshot(s){
+  if(!G.players.length) return;
+  G.phase=s.ph; G.time=s.t/10; G.round=s.rd; G.sd=!!s.sd;
+  G.banner=s.bn||null; G.bannerT=s.bt/10;
+  for(var i=0;i<s.g.length&&i<G.grid.length;i++) G.grid[i]=s.g.charCodeAt(i)-48;
+  var deaths=0;
+  for(var q=0;q<s.p.length&&q<G.players.length;q++){
+    var a=s.p[q], p=G.players[q];
+    var wasAlive=p.alive;
+    p.x=a[0]/2; p.y=a[1]/2; p.dir=DIR_N[a[2]]||"down";
+    p.alive=!!a[3]; p.deadT=a[4]/10; p.wins=a[5];
+    p.fire=a[6]; p.maxBombs=a[7]; p.speed=a[8];
+    p.kick=!!(a[9]&1); p.pierce=!!(a[9]&2); p.remote=!!(a[9]&4);
+    p.pig=!!(a[9]&8); p.invul=(a[9]&16)?1:0; p.walking=!!(a[9]&32);
+    p.hop=a[10]?{arc:a[10],t:0,x0:0,y0:0,x1:0,y1:0}:null;
+    p.sel=a[11]|0;
+    p.bag=(a[12]||[]).map(function(sl){ return {type:ITEM_TYPES[sl[0]]||"fire",n:sl[1]}; });
+    if(p.walking) p.anim+=0.5;
+    if(wasAlive&&!p.alive) deaths++;
+  }
+  G.bombs=s.b.map(function(a){
+    return {c:a[0],r:a[1],px:a[0]*T+T/2,py:a[1]*T+T/2,vx:0,vy:0,timer:a[2]/10,
+      fire:a[3],remote:!!a[4],pierce:!!a[5],owner:0,ghost:[],done:false,t:a[6]/10};
+  });
+  G.items=s.it.map(function(a){ return {c:a[0],r:a[1],type:ITEM_TYPES[a[2]]||"fire"}; });
+  G.traps=s.tr.map(function(a){ return {c:a[0],r:a[1],dx:a[2],dy:a[3],t:a[4]/10,owner:0}; });
+  var newBlasts=s.bl.length;
+  G.blasts=s.bl.map(function(a){
+    return {life:a[0]/100,max:FLAME_LIFE,cells:a[1].map(function(c){
+      return {c:c[0],r:c[1],k:KIND_N[c[2]]||"c",dx:c[3],dy:c[4]};
+    })};
+  });
+  G.falls=s.fl.map(function(a){ return {c:a[0],r:a[1],t:a[2]/10}; });
+  for(var d=0;d<s.dp.length&&d<G.players.length;d++){
+    var dep=s.dp[d];
+    G.players[d].deployed=dep?{type:ITEM_TYPES[dep[2]]||"trap",c:dep[0],r:dep[1],dx:dep[3],dy:dep[4],t:0}:null;
+  }
+  if(newBlasts>NET.blastCount){ SFX.boom(); G.shake=Math.min(3,G.shake+1.4); }
+  NET.blastCount=newBlasts;
+  if(deaths) SFX.die();
+  syncItemButton();
+  G.flame=new Set();
+  for(var bi=0;bi<G.blasts.length;bi++){
+    var cs=G.blasts[bi].cells;
+    for(var ci=0;ci<cs.length;ci++) G.flame.add(idx(cs[ci].c,cs[ci].r));
+  }
+}
+function applyNetInput(p){
+  var a=p.ni; if(!a) return;
+  p.mv.dx=a[0]|0; p.mv.dy=a[1]|0;
+  if(a[2]){ if(!p.nb){ placeBomb(p); p.nb=1; } } else p.nb=0;
+  if(a[3]){ if(!p.ns){ skillAction(p); p.ns=1; } } else p.ns=0;
+  if(a[4]){ if(!p.nn){ cycleItem(p); p.nn=1; } } else p.nn=0;
+  if(a[5]){ if(!p.nd){ detonate(p); p.nd=1; } } else p.nd=0;
 }
 
 /* ============ responsive layout ============ */
