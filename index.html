@@ -312,6 +312,7 @@
     font-family:var(--pix);font-size:10px;color:var(--ink);
   }
   .acts button.item-btn.empty canvas{opacity:.25}
+  .acts button.det.empty{filter:grayscale(.65);opacity:.55}
   body.touch .cards{display:none}
   body.touch #boxControls{display:none}
   body.touch .info{grid-template-columns:1fr}
@@ -519,13 +520,13 @@
         <kbd>SPACE / F</kbd><i>ボムをおく</i>
         <kbd>ENTER / G</kbd><i>わざ（1回で設置、もう1回で発動）</i>
         <kbd>SHIFT / T</kbd><i>アイテムをえらぶ</i>
-        <kbd>Z / R</kbd><i>ばくはつ（リモコンボム）</i>
+        <kbd>Z / R</kbd><i>おいたボムを 自分で ばくはつさせる</i>
         <kbd>P</kbd><i>ポーズ / 再開</i>
       </div>
     </div>
     <div class="box" id="boxItems">
       <h3>ITEMS<button type="button" id="itemsToggle" aria-expanded="false">ひらく</button></h3>
-      <p class="hint" id="itemHint">ひろったアイテムは「アイテム」ボタンで選び、「わざ」1回でその場に置く → もう1回で発動します。</p>
+      <p class="hint" id="itemHint">「ボム」でボムをおき、光ったら「ばくはつ」で自分のタイミングで爆発させられます。ひろったアイテムは「アイテム」で選び、「わざ」1回でその場に置く → もう1回で発動します。</p>
       <div class="itemlist" id="itemlist"></div>
     </div>
   </section>
@@ -545,12 +546,13 @@
 "use strict";
 
 /* ============ constants ============ */
-var BUILD="10";
+var BUILD="11";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
-var FUSE=2.4, FLAME_LIFE=0.42, REMOTE_FUSE=12;
+var FUSE=1.85, FLAME_LIFE=0.40, REMOTE_FUSE=12;
+var ARM_TIME=0.35, BOMB_REPEAT=0.20;
 var ROUND_TIME=120, SD_AT=30, SD_STEP=0.30, WINS_NEEDED=3;
-var BASE_SPEED=46, SPEED_STEP=9, MAX_FIRE=8, MAX_BOMB=8, MAX_SPEED=5;
+var BASE_SPEED=58, SPEED_STEP=10, MAX_FIRE=8, MAX_BOMB=8, MAX_SPEED=5;
 var DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
 var INF=Infinity;
 var ITEM_TYPES=["fire","bomb","speed","kick","pierce","remote","long","trap","pig"];
@@ -956,7 +958,8 @@ function makePlayer(slot,isAI,label){
     traps:0, pig:false, invul:0, hop:null, bump:0,
     bag:[], sel:0, deployed:null,
     live:0, alive:true, deadT:0, wins:0, anim:0, walking:false,
-    mv:{dx:0,dy:0}, think:0, bombCd:0, target:-1, plan:null
+    mv:{dx:0,dy:0}, think:0, bombCd:0, target:-1, plan:null,
+    lastH:0, lastV:0, holdX:0, holdY:0, bombRep:0
   };
 }
 function resetRound(){
@@ -972,9 +975,11 @@ function resetRound(){
     p.bag=[]; p.sel=0; p.deployed=null;
     p.live=0; p.alive=true; p.deadT=0; p.anim=0; p.mv.dx=0; p.mv.dy=0;
     p.dir=(p.id===1||p.id===3)?"up":"down"; p.bombCd=0; p.plan=null;
+    p.lastH=0; p.lastV=0; p.holdX=0; p.holdY=0; p.bombRep=0;
+    p.bombHeld=false; p.detHeld=false; p.skillHeld=false; p.itemHeld=false;
   }
-  setPhase("ready",1.6);
-  G.banner="READY"; G.bannerT=1.6;
+  setPhase("ready",1.1);
+  G.banner="READY"; G.bannerT=1.1;
   syncItemButton();
 }
 function setPhase(ph,t){ G.phase=ph; G.phaseT=t||0; }
@@ -1039,20 +1044,28 @@ window.addEventListener("blur",function(){
   function paint(){
     for(var k in cells) cells[k].classList.toggle("on",!!pad[k]);
   }
+  var lastAxis="";
   function aim(e){
     var r=dpadEl.getBoundingClientRect();
     var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
     pad.up=pad.down=pad.left=pad.right=false;
-    var dead=r.width*0.13;
-    if(Math.abs(x)>dead||Math.abs(y)>dead){
-      if(Math.abs(x)>Math.abs(y)){ if(x>0) pad.right=true; else pad.left=true; }
-      else { if(y>0) pad.down=true; else pad.up=true; }
+    var ax=Math.abs(x), ay=Math.abs(y);
+    var dead=r.width*0.085;
+    if(ax>dead||ay>dead){
+      /* Near the diagonal the thumb would flip axis every few pixels, so the
+         axis in use has to be beaten by a clear margin before it changes. */
+      var horiz;
+      if(lastAxis==="x") horiz=ax*1.3>=ay;
+      else if(lastAxis==="y") horiz=ax>=ay*1.3;
+      else horiz=ax>=ay;
+      if(horiz){ lastAxis="x"; if(x>0) pad.right=true; else pad.left=true; }
+      else { lastAxis="y"; if(y>0) pad.down=true; else pad.up=true; }
     }
     paint();
   }
   function release(){
     pad.up=pad.down=pad.left=pad.right=false;
-    activeId=null; paint();
+    activeId=null; lastAxis=""; paint();
   }
   dpadEl.addEventListener("pointerdown",function(e){
     e.preventDefault(); activeId=e.pointerId;
@@ -1081,6 +1094,7 @@ window.addEventListener("blur",function(){
   hold(document.getElementById("btnItem"),"item");
 })();
 var btnSkill=document.getElementById("btnSkill");
+var btnDet=document.getElementById("btnDet");
 var btnItem=document.getElementById("btnItem");
 var itemCountEl=document.getElementById("itemCount");
 function syncItemButton(){
@@ -1098,8 +1112,18 @@ function syncItemButton(){
   }
   btnItem.classList.toggle("empty",!has);
   btnSkill.classList.toggle("armed",!!(p&&p.deployed));
+  if(btnDet){
+    var ready=false;
+    if(p&&!p.isAI){
+      for(var bi=0;bi<G.bombs.length;bi++){
+        var bb=G.bombs[bi];
+        if(!bb.done&&bb.owner===p.id&&bombArmed(bb)){ ready=true; break; }
+      }
+    }
+    btnDet.classList.toggle("empty",!ready);
+  }
 }
-function readHuman(p){
+function readHuman(p,dt){
   var m=HUMAN_KEYS[p.id]||HUMAN_KEYS[0];
   var dx=0,dy=0;
   var up=keys[m.up], dn=keys[m.down], lf=keys[m.left], rt=keys[m.right];
@@ -1110,9 +1134,18 @@ function readHuman(p){
   }
   if(lf) dx=-1; else if(rt) dx=1;
   if(up) dy=-1; else if(dn) dy=1;
-  if(dx&&dy){ if(p.dir==="left"||p.dir==="right") dy=0; else dx=0; }
+  if(dx&&dy){
+    /* the direction pressed last wins, so you can turn without letting go */
+    if(p.holdX!==dx) dy=0;
+    else if(p.holdY!==dy) dx=0;
+    else if(p.dir==="left"||p.dir==="right") dy=0; else dx=0;
+  }
+  p.holdX=lf?-1:(rt?1:0); p.holdY=up?-1:(dn?1:0);
   p.mv.dx=dx; p.mv.dy=dy;
-  if(bomb){ if(!p.bombHeld){ placeBomb(p); p.bombHeld=true; } } else p.bombHeld=false;
+  if(bomb){
+    p.bombRep-=(dt||0);
+    if(!p.bombHeld||p.bombRep<=0){ placeBomb(p); p.bombHeld=true; p.bombRep=BOMB_REPEAT; }
+  } else { p.bombHeld=false; p.bombRep=0; }
   if(det){ if(!p.detHeld){ detonate(p); p.detHeld=true; } } else p.detHeld=false;
   if(skill){ if(!p.skillHeld){ skillAction(p); p.skillHeld=true; } } else p.skillHeld=false;
   if(item){ if(!p.itemHeld){ cycleItem(p); p.itemHeld=true; } } else p.itemHeld=false;
@@ -1139,6 +1172,18 @@ function passableFor(p,c,r){
   return true;
 }
 function sign(v){ return v>0?1:(v<0?-1:0); }
+/* Which way to shuffle along the cross axis so a blocked turn still goes
+   through. Prefer the way we were already heading, then the way we lean. */
+function slideDir(p,c,r,dx,dy,off){
+  var cands=dy?[p.lastH,sign(off),-sign(off)]:[p.lastV,sign(off),-sign(off)];
+  for(var i=0;i<cands.length;i++){
+    var s=cands[i];
+    if(!s||cands.indexOf(s)<i) continue;
+    if(dy){ if(passableFor(p,c+s,r)&&passableFor(p,c+s,r+dy)) return s; }
+    else  { if(passableFor(p,c,r+s)&&passableFor(p,c+dx,r+s)) return s; }
+  }
+  return 0;
+}
 
 /* ============ movement ============ */
 function tryHop(p,dx,dy,dt){
@@ -1167,6 +1212,7 @@ function movePlayer(p,dt){
   if(!dx&&!dy){ p.walking=false; p.bump=0; return; }
   p.walking=true;
   p.dir = dx>0?"right":(dx<0?"left":(dy>0?"down":"up"));
+  if(dx) p.lastH=dx; else if(dy) p.lastV=dy;
   p.anim+=dt*p.speed*0.075;
   var dist=p.speed*dt;
   var c=tileC(p), r=tileR(p);
@@ -1182,8 +1228,8 @@ function movePlayer(p,dt){
       if((dx>0&&p.x>limit)||(dx<0&&p.x<limit)) p.x=limit;
     } else {
       p.x=limit;
-      var s=sign(off);
-      if(s&&passableFor(p,c,r+s)&&passableFor(p,c+dx,r+s)){ p.y+=s*dist; p.bump=0; }
+      var s=slideDir(p,c,r,dx,0,off);
+      if(s){ p.y+=s*dist; p.bump=0; }
       else tryHop(p,dx,0,dt);
     }
   } else {
@@ -1198,8 +1244,8 @@ function movePlayer(p,dt){
       if((dy>0&&p.y>limy)||(dy<0&&p.y<limy)) p.y=limy;
     } else {
       p.y=limy;
-      var s2=sign(offx);
-      if(s2&&passableFor(p,c+s2,r)&&passableFor(p,c+s2,r+dy)){ p.x+=s2*dist; p.bump=0; }
+      var s2=slideDir(p,c,r,0,dy,offx);
+      if(s2){ p.x+=s2*dist; p.bump=0; }
       else tryHop(p,0,dy,dt);
     }
   }
@@ -1222,14 +1268,16 @@ function placeBomb(p){
   p.live++;
   SFX.place();
 }
+function bombArmed(b){ return b.remote?true:b.t>=ARM_TIME; }
 function detonate(p){
-  if(!p.remote||G.phase!=="play") return;
+  if(G.phase!=="play") return;
   var any=false;
   for(var i=0;i<G.bombs.length;i++){
     var b=G.bombs[i];
-    if(!b.done&&b.remote&&b.owner===p.id){ explode(b); any=true; }
+    if(!b.done&&b.owner===p.id&&bombArmed(b)){ explode(b); any=true; }
   }
   if(any) sweepBombs();
+  else tone(200,0.05,"square",0.05,150);
 }
 function kickBomb(b,dx,dy){
   b.vx=dx*96; b.vy=dy*96; SFX.ui();
@@ -1947,6 +1995,11 @@ function drawBombSprite(b,t){
     ctx.fillStyle=(((b.t*8)|0)%2)?"#3ef0d8":"#0d6f66";
     ctx.fillRect(Math.round(x-2),Math.round(y+1),4,2);
   }
+  if(!b.remote&&b.t>=ARM_TIME){
+    ctx.strokeStyle=(((b.t*10)|0)%2)?"#ffd23f":"#ff7a1f";
+    ctx.lineWidth=1;
+    ctx.strokeRect(Math.round(x-rad)-1.5,Math.round(y-rad)-1.5,rad*2+3,rad*2+3);
+  }
   ctx.fillStyle="#c79a5a"; ctx.fillRect(Math.round(x+1),Math.round(y-rad-2),2,3);
   var f=(((b.t*12)|0)%2);
   ctx.fillStyle=f?"#ffd23f":"#ff7a1f";
@@ -2590,12 +2643,13 @@ function update(dt){
       if(p.hop){ updateHop(p,dt); pickup(p); continue; }
       if(p.isAI) aiThink(p,dt);
       else if(p.ni) applyNetInput(p);
-      else readHuman(p);
+      else readHuman(p,dt);
       movePlayer(p,dt);
       pickup(p);
     }
     updateBombs(dt);
     updateSD(dt);
+    if(G.frame%4===0) syncItemButton();
     for(i=0;i<G.players.length;i++){
       var q=G.players[i];
       if(q.alive&&G.flame.has(idx(tileC(q),tileR(q)))) killPlayer(q);
@@ -3261,7 +3315,10 @@ function applySnapshot(s){
 function applyNetInput(p){
   var a=p.ni; if(!a) return;
   p.mv.dx=a[0]|0; p.mv.dy=a[1]|0;
-  if(a[2]){ if(!p.nb){ placeBomb(p); p.nb=1; } } else p.nb=0;
+  if(a[2]){
+    p.bombRep-=0.05;
+    if(!p.nb||p.bombRep<=0){ placeBomb(p); p.nb=1; p.bombRep=BOMB_REPEAT; }
+  } else { p.nb=0; p.bombRep=0; }
   if(a[3]){ if(!p.ns){ skillAction(p); p.ns=1; } } else p.ns=0;
   if(a[4]){ if(!p.nn){ cycleItem(p); p.nn=1; } } else p.nn=0;
   if(a[5]){ if(!p.nd){ detonate(p); p.nd=1; } } else p.nd=0;
@@ -3421,7 +3478,7 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layout);
     speed:["SPEED","移動が速くなる"],
     kick:["KICK","ボムを蹴って転がせる"],
     pierce:["PIERCE","爆風がブロックを貫通"],
-    remote:["REMOTE","好きな瞬間に起爆できる"],
+    remote:["REMOTE","時間で爆発しなくなり、完全に自分のタイミングで起爆できる"],
     long:["ロングボム","爆風が一気に最大まで伸びる"],
     trap:["ファイアトラップ","わざボタンで設置。前方に炎の壁が5秒燃える"],
     pig:["ブタ","乗ると壁を1マス跳び越える。1回やられるとブタだけ死ぬ"]
