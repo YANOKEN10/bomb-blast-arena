@@ -44,6 +44,9 @@
   html{overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
   body{
     margin:0;overflow-x:hidden;
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
     background-color:var(--mortar,#2b2118);
     background-repeat:repeat;
     background-size:96px 48px;
@@ -114,6 +117,8 @@
   }
   .status .time{font-size:18px;color:var(--volt);font-variant-numeric:tabular-nums}
   .status .time.danger{color:var(--flare);animation:blink .55s steps(2,end) infinite}
+  .status .time.free{color:var(--muted);font-size:15px}
+  .status .time.free::after{content:" ∞";font-size:13px;opacity:.8}
   @keyframes blink{50%{opacity:.25}}
   .status .round{color:var(--muted)}
   .status .tools{display:flex;gap:6px}
@@ -259,6 +264,11 @@
     background:#fff;border:2px solid var(--edge);padding:2px 8px;
   }
   .lobby{display:flex;flex-direction:column;gap:4px;width:min(330px,100%)}
+  .setline{
+    font-size:11px;color:var(--muted);text-align:center;
+    padding:4px 6px;border:2px dashed var(--edge);background:var(--panel-2);
+  }
+  .setline b{color:var(--accent);font-weight:400}
   .lobbyrow{
     display:flex;align-items:center;gap:8px;font-size:12px;
     background:var(--panel-2);border:2px solid var(--edge);padding:4px 8px;text-align:left;
@@ -291,6 +301,14 @@
   .dpad,.acts{
     display:none;touch-action:none;
     user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
+  }
+  .dpad span,.acts button,.hud button,.btn,#field{
+    -webkit-touch-callout:none;-webkit-user-drag:none;touch-action:manipulation;
+  }
+  .dpad,.dpad span{touch-action:none}
+  input,textarea,.overlay .code,.sheet .stats,.sheet .statgrid{
+    -webkit-touch-callout:default;
+    -webkit-user-select:text;user-select:text;
   }
   .dpad{
     grid-area:dpad;justify-self:start;gap:5px;
@@ -546,7 +564,7 @@
 "use strict";
 
 /* ============ constants ============ */
-var BUILD="11";
+var BUILD="12";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
 var FUSE=1.85, FLAME_LIFE=0.40, REMOTE_FUSE=12;
@@ -800,20 +818,70 @@ var SFX={
   drop:function(){noise(0.16,0.25,700); tone(70,0.14,"square",0.12,40);},
   ui:function(){tone(880,0.05,"square",0.08);}
 };
-/* simple 2-voice loop */
-var BASS=[0,0,7,0,3,0,7,5, 0,0,7,0,10,0,7,5];
-var LEAD=[12,15,19,15,12,15,22,19, 12,15,19,15,17,15,14,12];
-var ROOT=110;
-function nt(semi,oct){ return ROOT*Math.pow(2,(semi/12))*(oct||1); }
+/* Two-voice loop, one tune per stage. Values are semitones from the tune's
+   root; "mask" is which of the 16 steps the lead plays on. */
+function tune(o){
+  return {root:o.root, bpm:o.bpm, bass:o.bass, lead:o.lead, mask:o.mask,
+    bt:o.bt||"triangle", lt:o.lt||"square",
+    bv:o.bv||0.10, lv:o.lv||0.035};
+}
+var TUNES={
+  valley:tune({root:110,bpm:142,
+    bass:[0,0,7,0,3,0,7,5, 0,0,7,0,10,0,7,5],
+    lead:[12,15,19,15,12,15,22,19, 12,15,19,15,17,15,14,12],
+    mask:"1010101110101011"}),
+  city:tune({root:123,bpm:158,lt:"square",
+    bass:[0,0,0,7, 3,3,10,7, 5,5,0,7, 8,7,5,3],
+    lead:[12,14,15,17, 19,17,15,14, 12,15,19,22, 19,17,15,12],
+    mask:"1011101010111101"}),
+  site:tune({root:98,bpm:116,lt:"sawtooth",lv:0.030,bv:0.115,
+    bass:[0,0,0,0, 5,5,0,0, 7,7,0,0, 3,3,7,7],
+    lead:[12,12,10,12, 15,15,12,10, 12,12,15,17, 19,17,15,12],
+    mask:"1000101010001110"}),
+  snow:tune({root:131,bpm:106,lt:"triangle",lv:0.045,bv:0.085,
+    bass:[0,0,7,7, 4,4,9,9, 5,5,0,0, 7,7,7,7],
+    lead:[16,19,24,19, 16,21,24,21, 17,21,24,21, 19,16,12,16],
+    mask:"1010101010101011"}),
+  desert:tune({root:110,bpm:126,
+    bass:[0,0,0,1, 0,0,7,7, 0,0,0,1, 8,7,5,0],
+    lead:[12,13,16,17, 19,17,16,13, 12,13,16,19, 20,19,17,16],
+    mask:"1011010110110111"}),
+  sea:tune({root:87,bpm:98,lt:"triangle",lv:0.048,bv:0.09,
+    bass:[0,0,0,0, 5,5,5,5, 7,7,7,7, 3,3,10,10],
+    lead:[12,16,19,24, 19,16,12,16, 17,21,24,19, 15,12,15,19],
+    mask:"1001100110011001"}),
+  volcano:tune({root:82,bpm:168,lt:"sawtooth",lv:0.030,bv:0.12,
+    bass:[0,0,3,0, 0,0,5,0, 0,0,3,0, 7,6,5,3],
+    lead:[12,15,12,18, 17,15,12,10, 12,15,12,19, 18,17,15,12],
+    mask:"1110111011101111"}),
+  space:tune({root:116,bpm:120,lv:0.032,
+    bass:[0,0,6,6, 2,2,8,8, 4,4,10,10, 6,6,2,0],
+    lead:[12,14,18,20, 22,20,18,14, 12,16,20,22, 24,20,16,12],
+    mask:"1001101010011011"}),
+  candy:tune({root:147,bpm:160,lv:0.038,
+    bass:[0,7,0,7, 5,0,5,0, 9,4,9,4, 7,7,7,7],
+    lead:[12,16,19,24, 21,19,16,19, 17,21,24,21, 19,16,14,12],
+    mask:"1111101011111011"}),
+  shrine:tune({root:98,bpm:100,lt:"triangle",lv:0.046,bv:0.09,
+    bass:[0,0,0,0, 7,7,7,7, 5,5,5,5, 8,7,1,0],
+    lead:[12,13,17,19, 20,19,17,13, 12,13,17,20, 24,20,19,17],
+    mask:"1010001010100011"}),
+  cyber:tune({root:130,bpm:172,lv:0.033,
+    bass:[0,0,0,3, 0,0,0,5, 0,0,0,6, 7,6,5,3],
+    lead:[12,12,15,12, 19,15,12,15, 12,12,17,12, 22,19,17,15],
+    mask:"1101110111011111"})
+};
 function musicTick(){
   if(!A.on||!A.musicOn){return;}
   var c=actx(); if(!c) return;
-  var spb=60/142/2;
+  var tu=A.tune||TUNES.valley;
+  /* sudden death pushes the tempo up a notch */
+  var spb=60/(tu.bpm*(G.sd?1.16:1))/2;
   while(A.next < c.currentTime+0.2){
     var s=A.step%16;
     var t0=Math.max(A.next,c.currentTime);
-    schedNote(nt(BASS[s],0.5),t0,spb*0.9,"triangle",0.10);
-    if(s%2===0||s===7||s===15) schedNote(nt(LEAD[s],2),t0,spb*0.55,"square",0.035);
+    schedNote(tu.root*Math.pow(2,tu.bass[s]/12)*0.5,t0,spb*0.9,tu.bt,tu.bv);
+    if(tu.mask.charAt(s)==="1") schedNote(tu.root*Math.pow(2,tu.lead[s]/12)*2,t0,spb*0.55,tu.lt,tu.lv);
     A.next+=spb; A.step++;
   }
 }
@@ -889,7 +957,7 @@ var G={
   players:[], bombs:[], items:[], blasts:[], parts:[], falls:[], traps:[],
   flame:new Set(), danger:new Float32Array(COLS*ROWS),
   time:ROUND_TIME, round:1, shake:0, mode:null, sd:false, sdIdx:0, sdT:0, sdOrder:[],
-  banner:null, bannerT:0, winnerId:-1, frame:0, stage:STAGES[0], story:null, win:WINS_NEEDED, aiSlow:0
+  banner:null, bannerT:0, winnerId:-1, frame:0, stage:STAGES[0], story:null, win:WINS_NEEDED, aiSlow:0, timed:true
 };
 function idx(c,r){ return r*COLS+c; }
 function tileC(p){ return Math.floor(p.x/T); }
@@ -965,7 +1033,7 @@ function makePlayer(slot,isAI,label){
 function resetRound(){
   newField();
   G.bombs=[]; G.items=[]; G.blasts=[]; G.parts=[]; G.falls=[]; G.traps=[];
-  G.flame=new Set(); G.time=ROUND_TIME; G.sd=false; G.sdIdx=0; G.sdT=0;
+  G.flame=new Set(); G.time=G.timed?ROUND_TIME:0; G.sd=false; G.sdIdx=0; G.sdT=0;
   G.sdOrder=spiralOrder(); G.winnerId=-1; G.shake=0;
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i], sp=SPAWNS[p.id];
@@ -986,6 +1054,7 @@ function setPhase(ph,t){ G.phase=ph; G.phaseT=t||0; }
 
 function startMatch(mode,stage){
   G.mode=mode; G.round=1; G.win=(mode&&mode.win)||WINS_NEEDED; G.aiSlow=(mode&&mode.aiSlow)||0;
+  G.timed=!(mode&&mode.timed===false);
   G.stage=stage||G.stage||STAGES[0];
   applyStage(G.stage);
   G.players=[];
@@ -1036,6 +1105,20 @@ window.addEventListener("blur",function(){
   keys={};
   if(G.phase==="play"||G.phase==="ready") togglePause(true);
 });
+/* A long press on the pad used to pop up the browser's own selection /
+   "copy" bubble on top of the game. Anything outside a text field is not
+   selectable, so the press just keeps moving the player. */
+(function noSelect(){
+  function typing(el){
+    return !!(el&&el.closest&&el.closest("input,textarea,[contenteditable],.code"));
+  }
+  ["contextmenu","selectstart","dragstart"].forEach(function(type){
+    document.addEventListener(type,function(e){
+      if(!typing(e.target)) e.preventDefault();
+    },{passive:false});
+  });
+  document.addEventListener("gesturestart",function(e){ e.preventDefault(); },{passive:false});
+})();
 (function initPad(){
   var dpadEl=document.getElementById("dpad");
   var cells={};
@@ -1873,6 +1956,7 @@ function makeBrickURL(b){
 }
 function applyStage(st){
   SP=st;
+  A.tune=TUNES[st.id]||TUNES.valley;
   bakeFloor();
   if(st.brick){
     if(!st._brickURL) st._brickURL=makeBrickURL(st.brick);
@@ -2263,10 +2347,11 @@ function diagText(){
     (over>1?(" OVER"+over):"");
 }
 function updateStatus(){
-  var t=Math.max(0,Math.ceil(G.time));
+  var t=Math.max(0,G.timed?Math.ceil(G.time):Math.floor(G.time));
   var m=Math.floor(t/60), s=t%60;
   timerEl.textContent=m+":"+(s<10?"0":"")+s;
   timerEl.classList.toggle("danger",G.sd);
+  timerEl.classList.toggle("free",!G.timed);
   var label=G.story?('第'+(G.story.ch+1)+'章 <span class="sub">R'+G.round+' / '+G.win+'先取</span>')
     :G.mode?('ROUND '+G.round+'<span class="sub"> / FIRST TO '+G.win+'</span>')
     :('READY <span class="sub">'+diagText()+'</span>');
@@ -2417,7 +2502,7 @@ function storyLose(){
 }
 
 /* ---- friends lobby ---- */
-var lobbyStage=0;
+var lobbyStage=0, lobbyTimed=true;
 function showFriends(){
   showOverlay('<h2>FRIENDS</h2>'+
     '<p>あいことばを つたえあって、友だちと対戦できます（最大4人）。</p>'+
@@ -2445,11 +2530,16 @@ function showLobby(keep){
     (NET.role==="host"
       ? '<p>この4文字を友だちに おしえてください。全員そろったら「はじめる」。</p>'
       : '<p>'+(connected?"ホストが はじめるのを まっています。":"つないでいます…")+'</p>')+
-    '<div class="lobby">'+list+'</div>'+
+    '<div class="lobby">'+list+
+      (NET.role==="host" ? '' :
+        '<div class="setline">ステージ：<b>'+STAGES[lobbyStage].name+'</b>'+
+        '　せいげん時間：<b>'+(lobbyTimed?"2:00":"なし")+'</b></div>')+'</div>'+
     (NET.err?'<p class="err">'+NET.err+'</p>':'')+
     '<div class="menu">'+
     (NET.role==="host"
       ? '<button class="btn" data-act="lobstage">ステージ：'+STAGES[lobbyStage].name+'</button>'+
+        '<button class="btn" data-act="lobtime">せいげん時間：'+(lobbyTimed?"2:00":"なし")+
+          '<small>'+(lobbyTimed?"のこり30秒でサドンデス":"時間ぎれなし。最後の1人になるまで")+'</small></button>'+
         '<button class="btn primary" data-act="lobstart"'+(connected?"":" disabled")+'>はじめる</button>'
       : '')+
     '<button class="btn ghost" data-act="lobquit">やめる</button></div>';
@@ -2544,7 +2634,8 @@ function onOverlayClick(act){
     return;
   }
   if(act==="joinroom"){ openJoinRoom(); return; }
-  if(act==="lobstage"){ lobbyStage=(lobbyStage+1)%STAGES.length; showLobby(); return; }
+  if(act==="lobstage"){ lobbyStage=(lobbyStage+1)%STAGES.length; hostSendLobby(); showLobby(); return; }
+  if(act==="lobtime"){ lobbyTimed=!lobbyTimed; hostSendLobby(); showLobby(); return; }
   if(act==="lobstart"){ hostStartMatch(STAGES[lobbyStage]); return; }
   if(act==="lobquit"){
     if(NET.code&&NET.role==="host") netApi({action:"close",code:NET.code}).catch(function(){});
@@ -2631,9 +2722,13 @@ function update(dt){
     if(G.phaseT<=0.7&&G.banner==="READY"){ G.banner="GO!"; G.bannerT=0.7; }
     if(G.phaseT<=0){ setPhase("play",0); }
   } else if(G.phase==="play"){
-    G.time-=dt;
-    if(G.time<=SD_AT&&!G.sd){ G.sd=true; G.banner="SUDDEN DEATH"; G.bannerT=1.8; }
-    if(G.time<0) G.time=0;
+    if(G.timed){
+      G.time-=dt;
+      if(G.time<=SD_AT&&!G.sd){ G.sd=true; G.banner="SUDDEN DEATH"; G.bannerT=1.8; }
+      if(G.time<0) G.time=0;
+    } else {
+      G.time+=dt;
+    }
     updateTraps(dt);
     computeDanger();
     for(i=0;i<G.players.length;i++){
@@ -3016,6 +3111,10 @@ function netSend(dc,obj){
 function netBroadcast(obj){
   for(var k in NET.dcs) netSend(NET.dcs[k],obj);
 }
+function hostSendLobby(){
+  if(NET.role!=="host") return;
+  netBroadcast({lobby:{stage:lobbyStage,timed:lobbyTimed?1:0}});
+}
 
 /* ---- host ---- */
 function hostCreateRoom(){
@@ -3078,7 +3177,7 @@ function hostAnswer(slot,offer){
 }
 function hostBindChannel(slot,dc){
   NET.dcs[slot]=dc;
-  dc.onopen=function(){ if(netAllConnected()) netStopPolling(); refreshLobby(); };
+  dc.onopen=function(){ if(netAllConnected()) netStopPolling(); hostSendLobby(); refreshLobby(); };
   dc.onclose=function(){ netDrop(slot); };
   dc.onmessage=function(e){
     var m={}; try{ m=JSON.parse(e.data); }catch(err){ return; }
@@ -3165,6 +3264,11 @@ function guestBindChannel(dc){
   dc.onmessage=function(e){
     var m={}; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.start) guestStart(m.start);
+    else if(m.lobby){
+      lobbyStage=Math.max(0,Math.min(STAGES.length-1,m.lobby.stage|0));
+      lobbyTimed=m.lobby.timed!==0;
+      if(!NET.started&&overlay.getAttribute("data-lobby")==="1") showLobby();
+    }
     else if(m.s) applySnapshot(m.s);
     else if(m.end){ NET.started=false; setPhase("matchend",0); G.winnerId=m.end.w; showMatchEnd(); }
   };
@@ -3189,11 +3293,11 @@ function netLooks(){
 function hostStartMatch(stage){
   var members=netMembers().filter(function(m){ return m.slot==="host"||NET.dcs[m.slot]; });
   var total=Math.max(2,members.length);
-  var mode={humans:members.length,total:total,label:"FRIENDS"};
+  var mode={humans:members.length,total:total,label:"FRIENDS",timed:lobbyTimed};
   NET.started=true;
   netApi({action:"post",code:NET.code,who:"host",data:{open:false}}).catch(function(){});
   startMatch(mode,stage);
-  var setup={stage:STAGES.indexOf(G.stage),names:[],looks:[],you:0,total:total};
+  var setup={stage:STAGES.indexOf(G.stage),names:[],looks:[],you:0,total:total,timed:lobbyTimed?1:0};
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
     if(i===0){ p.isAI=false; p.label=NET.myName; }
@@ -3216,7 +3320,7 @@ function hostStartMatch(stage){
 function guestStart(setup){
   NET.started=true;
   var stage=STAGES[Math.max(0,Math.min(STAGES.length-1,setup.stage|0))];
-  startMatch({humans:1,total:setup.total,label:"FRIENDS"},stage);
+  startMatch({humans:1,total:setup.total,label:"FRIENDS",timed:setup.timed!==0},stage);
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
     p.isAI=false;
@@ -3239,7 +3343,7 @@ function gridString(){
 function hostSendSnapshot(){
   if(NET.role!=="host"||!NET.started) return;
   var s={
-    ph:G.phase, t:Math.round(G.time*10), rd:G.round, sd:G.sd?1:0,
+    ph:G.phase, t:Math.round(G.time*10), rd:G.round, sd:G.sd?1:0, td:G.timed?1:0,
     bn:G.banner||"", bt:Math.round((G.bannerT||0)*10),
     g:gridString(),
     p:G.players.map(function(p){
@@ -3268,6 +3372,7 @@ function applySnapshot(s){
   if(!G.players.length) return;
   NET.snaps=(NET.snaps||0)+1; NET.lastSnap=Date.now();
   G.phase=s.ph; G.time=s.t/10; G.round=s.rd; G.sd=!!s.sd;
+  if(s.td!=null) G.timed=!!s.td;
   G.banner=s.bn||null; G.bannerT=s.bt/10;
   for(var i=0;i<s.g.length&&i<G.grid.length;i++) G.grid[i]=s.g.charCodeAt(i)-48;
   var deaths=0;
