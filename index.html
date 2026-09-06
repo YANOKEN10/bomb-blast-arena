@@ -564,7 +564,7 @@
 "use strict";
 
 /* ============ constants ============ */
-var BUILD="14";
+var BUILD="15";
 var COLS=15, ROWS=13, T=16, W=COLS*T, H=ROWS*T;
 var EMPTY=0, HARD=1, SOFT=2;
 var FUSE=1.85, FLAME_LIFE=0.40, REMOTE_FUSE=12;
@@ -955,7 +955,7 @@ function drawItemOn(g,type,x,y,t){
 var G={
   phase:"title", phaseT:0, grid:new Uint8Array(COLS*ROWS),
   players:[], bombs:[], items:[], blasts:[], parts:[], falls:[], traps:[],
-  flame:new Set(), danger:new Float32Array(COLS*ROWS),
+  flame:new Set(), flameBy:{}, danger:new Float32Array(COLS*ROWS),
   time:ROUND_TIME, round:1, shake:0, mode:null, sd:false, sdIdx:0, sdT:0, sdOrder:[],
   banner:null, bannerT:0, winnerId:-1, frame:0, stage:STAGES[0], story:null, win:WINS_NEEDED, aiSlow:0, timed:true
 };
@@ -1020,7 +1020,7 @@ function makePlayer(slot,isAI,label){
   var pal=BODY_COLORS[SLOT_COLORS[slot%SLOT_COLORS.length]];
   var sp=SPAWNS[slot];
   return {
-    id:slot, pal:pal, cols:uniformCols(pal), isAI:isAI, label:label,
+    id:slot, team:slot, pal:pal, cols:uniformCols(pal), isAI:isAI, label:label,
     x:sp[0]*T+T/2, y:sp[1]*T+T/2, dir:slot===1||slot===3?"up":"down",
     speed:BASE_SPEED, fire:1, maxBombs:1, kick:false, pierce:false, remote:false,
     traps:0, pig:false, invul:0, hop:null, bump:0,
@@ -1033,7 +1033,7 @@ function makePlayer(slot,isAI,label){
 function resetRound(){
   newField();
   G.bombs=[]; G.items=[]; G.blasts=[]; G.parts=[]; G.falls=[]; G.traps=[];
-  G.flame=new Set(); G.time=G.timed?ROUND_TIME:0; G.sd=false; G.sdIdx=0; G.sdT=0;
+  G.flame=new Set(); G.flameBy={}; G.time=G.timed?ROUND_TIME:0; G.sd=false; G.sdIdx=0; G.sdT=0;
   G.sdOrder=spiralOrder(); G.winnerId=-1; G.shake=0;
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i], sp=SPAWNS[p.id];
@@ -1077,10 +1077,34 @@ function startMatch(mode,stage){
     used[pq.pal.key]=1;
     pq.cols=uniformCols(pq.pal);
   }
+  assignTeams();
   buildCards();
   hideOverlay();
   resetRound();
   if(A.musicOn) startMusic();
+}
+/* In a co-op match every human is on team 0 and every CPU on team 1.
+   Otherwise each player is their own team, so the old free-for-all rules
+   fall out of the same code. */
+function assignTeams(){
+  var team=!!(G.mode&&G.mode.team);
+  for(var i=0;i<G.players.length;i++){
+    var p=G.players[i];
+    p.team=team?(p.isAI?1:0):p.id;
+  }
+}
+function isFoe(p,o){ return o!==p&&o.alive&&o.team!==p.team; }
+function teamName(t){ return t===1?"CPU":"PLAYERS"; }
+/* A flame hurts you if it came from an enemy, or from your own ball.
+   A team-mate's ball is harmless in co-op. */
+function flameHurts(p,id){
+  if(!(G.mode&&G.mode.team)) return true;
+  var m=G.flameBy[id]|0;
+  for(var i=0;i<G.players.length;i++){
+    if(!(m&(1<<i))) continue;
+    if(i===p.id||G.players[i].team!==p.team) return true;
+  }
+  return false;
 }
 
 /* ============ input ============ */
@@ -1445,7 +1469,7 @@ function explode(b){
       if(!ob.done&&ob!==b&&ob.c===cell.c&&ob.r===cell.r) chain.push(ob);
     }
   }
-  G.blasts.push({cells:cells,life:FLAME_LIFE,max:FLAME_LIFE});
+  G.blasts.push({cells:cells,life:FLAME_LIFE,max:FLAME_LIFE,owner:b.owner|0});
   G.shake=Math.min(3.4,G.shake+1.7);
   SFX.boom();
   for(var m=0;m<chain.length;m++) explode(chain[m]);
@@ -1484,6 +1508,7 @@ function updateTraps(dt){
     for(var j=1;j<cells.length;j++){
       var id=idx(cells[j].c,cells[j].r);
       G.flame.add(id);
+      G.flameBy[id]=(G.flameBy[id]|0)|(1<<(tr.owner|0));
       var b=bombAt(cells[j].c,cells[j].r);
       if(b){ explode(b); sweepBombs(); }
     }
@@ -1790,7 +1815,7 @@ function stepTo(p,here,prev,goal){
 function enemyLineDir(p,c,r,range){
   for(var i=0;i<G.players.length;i++){
     var o=G.players[i];
-    if(o===p||!o.alive) continue;
+    if(!isFoe(p,o)) continue;
     var oc=tileC(o), orr=tileR(o);
     if(oc!==c&&orr!==r) continue;
     var dist=Math.abs(oc-c)+Math.abs(orr-r);
@@ -1811,7 +1836,7 @@ function goalBonus(p,c,r){
   var near=99;
   for(i=0;i<G.players.length;i++){
     var o=G.players[i];
-    if(o===p||!o.alive) continue;
+    if(!isFoe(p,o)) continue;
     var d=Math.abs(tileC(o)-c)+Math.abs(tileR(o)-r);
     if(d<near) near=d;
   }
@@ -1826,7 +1851,7 @@ function tileValue(p,c,r){
   }
   for(var i=0;i<G.players.length;i++){
     var o=G.players[i];
-    if(o===p||!o.alive) continue;
+    if(!isFoe(p,o)) continue;
     var oc=tileC(o), or_=tileR(o);
     if(oc===c&&or_===r) { v+=5; continue; }
     if(oc===c||or_===r){
@@ -1906,15 +1931,30 @@ function killPlayer(p){
 function aliveList(){
   return G.players.filter(function(p){ return p.alive; });
 }
+function aliveTeams(){
+  var seen={}, n=0;
+  for(var i=0;i<G.players.length;i++){
+    var p=G.players[i];
+    if(p.alive&&!seen[p.team]){ seen[p.team]=1; n++; }
+  }
+  return n;
+}
 function checkRoundEnd(){
   var alive=aliveList();
-  if(alive.length<=1){
+  if(aliveTeams()<=1){
     var still=G.players.some(function(p){ return !p.alive&&p.deadT>0; });
     if(still) return;
-    G.winnerId=alive.length===1?alive[0].id:-1;
-    if(G.winnerId>=0){ G.players[G.winnerId].wins++; SFX.win(); }
+    G.winnerId=alive.length?alive[0].id:-1;
+    if(G.winnerId>=0){
+      var wt=G.players[G.winnerId].team;
+      for(var w=0;w<G.players.length;w++) if(G.players[w].team===wt) G.players[w].wins++;
+      SFX.win();
+    }
     setPhase("roundend",2.6);
-    G.banner=G.winnerId>=0?(G.players[G.winnerId].label+" WIN!"):"DRAW";
+    var teamMode=!!(G.mode&&G.mode.team);
+    G.banner=G.winnerId>=0
+      ?((teamMode?teamName(G.players[G.winnerId].team):G.players[G.winnerId].label)+" WIN!")
+      :"DRAW";
     G.bannerT=2.6;
     updateCards(true);
   }
@@ -2361,6 +2401,7 @@ function updateCards(force){
 }
 /* shown on the title screen so a screenshot tells us what the device did */
 var DIAG=/[?&]diag=1/.test(location.search);
+if(DIAG){ window.__G=G; window.__step=function(dt){ update(dt); }; } /* lets a debug session poke and step the state */
 function diagText(){
   if(!DIAG) return "v"+BUILD;
   var rs=getComputedStyle(document.documentElement);
@@ -2422,8 +2463,19 @@ var MODES={
   solo1:{humans:1,total:2,label:"CPU 1体"},
   solo2:{humans:1,total:3,label:"CPU 2体"},
   solo3:{humans:1,total:4,label:"CPU 3体"},
-  duo:{humans:2,total:4,label:"2人 + CPU 2体"}
+  duo:{humans:2,total:4,label:"2人 + CPU 2体"},
+  coop1:{humans:2,total:3,label:"2人 きょうりょく VS CPU 1体",team:true},
+  coop2:{humans:2,total:4,label:"2人 きょうりょく VS CPU 2体",team:true}
 };
+function showLocal2(){
+  showOverlay('<h2>2P（1台で2人）</h2>'+
+    '<p>1Pは矢印キー、2PはWASD。「きょうりょく」では2人がチームになってCPUと戦います。なかまのボールでは やられません。</p>'+
+    '<div class="menu">'+
+    '<button class="btn primary" data-act="coop1">きょうりょく VS CPU x1<small>2人で力を合わせて、CPU 1体をたおす</small></button>'+
+    '<button class="btn" data-act="coop2">きょうりょく VS CPU x2<small>2人 vs CPU 2体のチーム戦</small></button>'+
+    '<button class="btn" data-act="duo">2P + CPU x2<small>4人みんなで対戦（1人だけが勝ち）</small></button>'+
+    '<button class="btn ghost" data-act="modes">&#8592; もどる</button></div>');
+}
 function showTitle(){
   G.mode=null; G.players=[]; placeholderCards(); updateStatus();
   newField();
@@ -2434,7 +2486,7 @@ function showTitle(){
     '<button class="btn primary" data-act="solo1">1P VS CPU x1<small>まずはここから。1対1の腕試し</small></button>'+
     '<button class="btn" data-act="solo2">1P VS CPU x2<small>3人バトル。挟み撃ちに注意</small></button>'+
     '<button class="btn" data-act="solo3">1P VS CPU x3<small>4人フルバトル。混戦必至</small></button>'+
-    '<button class="btn" data-act="duo">2P + CPU x2<small>1台で2人対戦（矢印キー / WASD）</small></button>'+
+    '<button class="btn" data-act="local2">2P<small>1台で2人。きょうりょく か 対戦（矢印キー / WASD）</small></button>'+
     '<button class="btn" data-act="story">STORY<small>'+
       (PROG.cleared>=STORY.length?"ぜんぶクリア！":("第"+(PROG.cleared+1)+"章：CPUに勝ち進む"))+'</small></button>'+
     '<button class="btn" data-act="maker">EDIT<small>キャラの いろをえらぶ（100色）</small></button>'+
@@ -2533,7 +2585,11 @@ function storyLose(){
 }
 
 /* ---- friends lobby ---- */
-var lobbyStage=0, lobbyTimed=true;
+var lobbyStage=0, lobbyTimed=true, lobbyCpu=0, lobbyTeam=true;
+/* CPUs only fill the seats people are not using */
+function lobbyMaxCpu(){ return Math.max(0,4-netMembers().length); }
+function lobbyCpuCount(){ return Math.min(lobbyCpu,lobbyMaxCpu()); }
+function lobbyRuleText(){ return lobbyTeam?"きょうりょく（人 vs CPU）":"みんなで対戦"; }
 function showFriends(){
   showOverlay('<h2>FRIENDS</h2>'+
     '<p>あいことばを つたえあって、友だちと対戦できます（最大4人）。</p>'+
@@ -2557,6 +2613,7 @@ function showLobby(keep){
   }
   var connected=(NET.role==="guest")?(NET.dcs.host&&NET.dcs.host.readyState==="open"):
     Object.keys(NET.dcs).filter(function(k){ return NET.dcs[k].readyState==="open"; }).length>0;
+  var cpu=lobbyCpuCount(), maxCpu=lobbyMaxCpu();
   var html='<h2>'+(NET.role==="host"?"あいことば　":"へや　")+'<span class="code">'+NET.code+'</span></h2>'+
     (NET.role==="host"
       ? '<p>この4文字を友だちに おしえてください。全員そろったら「はじめる」。</p>'
@@ -2564,13 +2621,19 @@ function showLobby(keep){
     '<div class="lobby">'+list+
       (NET.role==="host" ? '' :
         '<div class="setline">ステージ：<b>'+STAGES[lobbyStage].name+'</b>'+
-        '　せいげん時間：<b>'+(lobbyTimed?"2:00":"なし")+'</b></div>')+'</div>'+
+        '　せいげん時間：<b>'+(lobbyTimed?"2:00":"なし")+'</b>'+
+        '　CPU：<b>'+(cpu?cpu+"体":"なし")+'</b>'+
+        (cpu?'　ルール：<b>'+lobbyRuleText()+'</b>':'')+'</div>')+'</div>'+
     (NET.err?'<p class="err">'+NET.err+'</p>':'')+
     '<div class="menu">'+
     (NET.role==="host"
       ? '<button class="btn" data-act="lobstage">ステージ：'+STAGES[lobbyStage].name+'</button>'+
         '<button class="btn" data-act="lobtime">せいげん時間：'+(lobbyTimed?"2:00":"なし")+
           '<small>'+(lobbyTimed?"のこり30秒でサドンデス":"時間ぎれなし。最後の1人になるまで")+'</small></button>'+
+        '<button class="btn" data-act="lobcpu"'+(maxCpu?"":" disabled")+'>CPU：'+(cpu?cpu+"体":"なし")+
+          '<small>'+(maxCpu?"あいている席にCPUを入れる（さいだい"+maxCpu+"体）":"4人そろっているので入れられません")+'</small></button>'+
+        (cpu?'<button class="btn" data-act="lobteam">ルール：'+lobbyRuleText()+
+          '<small>'+(lobbyTeam?"人はみんな なかま。なかまのボールでは やられない":"CPUも人も ぜんいん敵。最後の1人が勝ち")+'</small></button>':'')+
         '<button class="btn primary" data-act="lobstart"'+(connected?"":" disabled")+'>はじめる</button>'
       : '')+
     '<button class="btn ghost" data-act="lobquit">やめる</button></div>';
@@ -2633,8 +2696,17 @@ function showPause(){
 function showMatchEnd(){
   var w=G.players[G.winnerId];
   if(G.story){ if(w&&w.id===0) storyWin(); else storyLose(); return; }
-  showOverlay('<h2>'+(w?w.label+" "+w.pal.name+" が優勝！":"引き分け")+'</h2>'+
-    '<p>'+G.round+'ラウンドの死闘。'+(w?w.wins+"勝で決着しました。":"")+'</p><div class="menu">'+
+  var head, body;
+  if(G.mode&&G.mode.team){
+    var names=G.players.filter(function(p){ return p.team===0; }).map(function(p){ return p.label; }).join("・");
+    if(!w){ head="引き分け"; body=G.round+'ラウンドの死闘でした。'; }
+    else if(w.team===0){ head="みんなの勝ち！"; body=names+' のチームが '+w.wins+'勝で CPUに 勝ちました！'; }
+    else { head="CPUの勝ち…"; body='CPUに '+w.wins+'勝 とられました。もう一度 力を合わせて ちょうせん！'; }
+  } else {
+    head=w?w.label+" "+w.pal.name+" が優勝！":"引き分け";
+    body=G.round+'ラウンドの死闘。'+(w?w.wins+"勝で決着しました。":"");
+  }
+  showOverlay('<h2>'+head+'</h2><p>'+body+'</p><div class="menu">'+
     '<button class="btn primary" data-act="again">REMATCH<small>同じルールでもう一度</small></button>'+
     '<button class="btn" data-act="title">MODE SELECT<small>モード選択に戻る</small></button></div>');
 }
@@ -2654,6 +2726,7 @@ function showQuitConfirm(){
 function onOverlayClick(act){
   if(MODES[act]){ pendingMode=MODES[act]; showStageSelect(); return; }
   if(act==="modes"){ showTitle(); return; }
+  if(act==="local2"){ showLocal2(); return; }
   if(act==="maker"){ openMaker(); return; }
   if(act==="story"){ showStory(); return; }
   if(act&&/^ch\d+$/.test(act)){ startStory(parseInt(act.slice(2),10)); return; }
@@ -2667,6 +2740,8 @@ function onOverlayClick(act){
   if(act==="joinroom"){ openJoinRoom(); return; }
   if(act==="lobstage"){ lobbyStage=(lobbyStage+1)%STAGES.length; hostSendLobby(); showLobby(); return; }
   if(act==="lobtime"){ lobbyTimed=!lobbyTimed; hostSendLobby(); showLobby(); return; }
+  if(act==="lobcpu"){ lobbyCpu=(lobbyCpuCount()+1)%(lobbyMaxCpu()+1); hostSendLobby(); showLobby(); return; }
+  if(act==="lobteam"){ lobbyTeam=!lobbyTeam; hostSendLobby(); showLobby(); return; }
   if(act==="lobstart"){ hostStartMatch(STAGES[lobbyStage]); return; }
   if(act==="lobquit"){
     if(NET.code&&NET.role==="host") netApi({action:"close",code:NET.code}).catch(function(){});
@@ -2741,10 +2816,14 @@ function update(dt){
     G.blasts[i].life-=dt;
     if(G.blasts[i].life<=0) G.blasts.splice(i,1);
   }
-  G.flame=new Set();
+  G.flame=new Set(); G.flameBy={};
   for(i=0;i<G.blasts.length;i++){
-    var cells=G.blasts[i].cells;
-    for(var j=0;j<cells.length;j++) G.flame.add(idx(cells[j].c,cells[j].r));
+    var cells=G.blasts[i].cells, bit=1<<(G.blasts[i].owner|0);
+    for(var j=0;j<cells.length;j++){
+      var fid=idx(cells[j].c,cells[j].r);
+      G.flame.add(fid);
+      G.flameBy[fid]=(G.flameBy[fid]|0)|bit;
+    }
   }
   for(i=0;i<G.players.length;i++) if(!G.players[i].alive&&G.players[i].deadT>0) G.players[i].deadT-=dt;
 
@@ -2778,7 +2857,8 @@ function update(dt){
     if(G.frame%4===0) syncItemButton();
     for(i=0;i<G.players.length;i++){
       var q=G.players[i];
-      if(q.alive&&G.flame.has(idx(tileC(q),tileR(q)))) killPlayer(q);
+      var qi=idx(tileC(q),tileR(q));
+      if(q.alive&&G.flame.has(qi)&&flameHurts(q,qi)) killPlayer(q);
     }
     checkRoundEnd();
     if(G.frame%5===0) updateCards(false);
@@ -2796,7 +2876,7 @@ function update(dt){
           if(NET.tick){ clearInterval(NET.tick); NET.tick=null; }
         }
         if(G.players[0]&&!G.players[0].isAI){
-          pushStats({matches:1,matchWins:champ.id===0?1:0,rounds:G.round,roundWins:G.players[0].wins});
+          pushStats({matches:1,matchWins:champ.team===G.players[0].team?1:0,rounds:G.round,roundWins:G.players[0].wins});
         }
         showMatchEnd();
       }
@@ -3102,7 +3182,8 @@ function netReset(){
   if(NET.tick){ clearInterval(NET.tick); NET.tick=null; }
   for(var k in NET.pcs){ try{ NET.pcs[k].close(); }catch(e){} }
   NET={role:null,code:"",slot:"",pcs:{},dcs:{},members:{},poll:null,tick:null,
-       lastSnap:0,myName:"",started:false,err:"",blastCount:0,aliveWas:[]};
+       lastSnap:0,myName:"",started:false,err:"",blastCount:0,aliveWas:[],slotIdx:{}};
+  lobbyCpu=0; lobbyTeam=true;
 }
 function netMembers(){
   var out=[{slot:"host",name:NET.members.host||"ホスト",ready:true}];
@@ -3144,7 +3225,7 @@ function netBroadcast(obj){
 }
 function hostSendLobby(){
   if(NET.role!=="host") return;
-  netBroadcast({lobby:{stage:lobbyStage,timed:lobbyTimed?1:0}});
+  netBroadcast({lobby:{stage:lobbyStage,timed:lobbyTimed?1:0,cpu:lobbyCpuCount(),team:lobbyTeam?1:0}});
 }
 
 /* ---- host ---- */
@@ -3213,8 +3294,8 @@ function hostBindChannel(slot,dc){
   dc.onmessage=function(e){
     var m={}; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.i){
-      var idx=parseInt(slot.slice(1),10);
-      var p=G.players[idx];
+      var pi=NET.slotIdx?NET.slotIdx[slot]:null;
+      var p=pi==null?null:G.players[pi];
       if(p) p.ni=m.i;
     }
   };
@@ -3223,8 +3304,8 @@ function netDrop(slot){
   if(NET.dcs[slot]){ try{ NET.dcs[slot].close(); }catch(e){} delete NET.dcs[slot]; }
   if(NET.pcs[slot]){ try{ NET.pcs[slot].close(); }catch(e){} delete NET.pcs[slot]; }
   if(NET.role==="host"&&NET.started){
-    var idx=parseInt(slot.slice(1),10);
-    var p=G.players[idx];
+    var pi=NET.slotIdx?NET.slotIdx[slot]:null;
+    var p=pi==null?null:G.players[pi];
     if(p){ p.isAI=true; p.ni=null; }
   } else if(NET.role==="host"){
     delete NET.members[slot];
@@ -3298,6 +3379,8 @@ function guestBindChannel(dc){
     else if(m.lobby){
       lobbyStage=Math.max(0,Math.min(STAGES.length-1,m.lobby.stage|0));
       lobbyTimed=m.lobby.timed!==0;
+      lobbyCpu=Math.max(0,Math.min(3,m.lobby.cpu|0));
+      lobbyTeam=m.lobby.team!==0;
       if(!NET.started&&overlay.getAttribute("data-lobby")==="1") showLobby();
     }
     else if(m.s) applySnapshot(m.s);
@@ -3322,27 +3405,39 @@ function netLooks(){
   return [lk.face,lk.body,lk.arms,lk.legs,lk.eyes];
 }
 function hostStartMatch(stage){
-  var members=netMembers().filter(function(m){ return m.slot==="host"||NET.dcs[m.slot]; });
-  var total=Math.max(2,members.length);
-  var mode={humans:members.length,total:total,label:"FRIENDS",timed:lobbyTimed};
-  NET.started=true;
+  /* guests take the seats after the host in join order, CPUs fill the rest */
+  var guests=[];
+  for(var gi=1;gi<=3;gi++){ var gs="g"+gi; if(NET.dcs[gs]) guests.push(gs); }
+  var humans=1+guests.length;
+  var cpu=Math.max(0,Math.min(lobbyCpu,4-humans));
+  var total=Math.max(2,humans+cpu);
+  var team=cpu>0&&lobbyTeam;
+  var mode={humans:humans,total:total,label:"FRIENDS",timed:lobbyTimed,team:team};
+  NET.started=true; NET.slotIdx={};
   netApi({action:"post",code:NET.code,who:"host",data:{open:false}}).catch(function(){});
   startMatch(mode,stage);
-  var setup={stage:STAGES.indexOf(G.stage),names:[],looks:[],you:0,total:total,timed:lobbyTimed?1:0};
+  var setup={stage:STAGES.indexOf(G.stage),names:[],looks:[],teams:[],you:0,total:total,timed:lobbyTimed?1:0,team:team?1:0};
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
     if(i===0){ p.isAI=false; p.label=NET.myName; }
-    else {
-      var slot="g"+i;
-      if(NET.dcs[slot]){ p.isAI=false; p.ni=[0,0,0,0,0,0]; p.label=NET.members[slot]||("P"+(i+1)); }
-      else { p.isAI=true; p.label="CPU"; }
+    else if(i<=guests.length){
+      var slot=guests[i-1];
+      NET.slotIdx[slot]=i;
+      p.isAI=false; p.ni=[0,0,0,0,0,0]; p.label=NET.members[slot]||("P"+(i+1));
     }
-    setup.names.push(p.label);
-    setup.looks.push([p.cols.face.key,p.cols.body.key,p.cols.arms.key,p.cols.legs.key,p.cols.eyes.key]);
+    else { p.isAI=true; p.label="CPU"+(i-guests.length); }
+  }
+  assignTeams();
+  for(var k=0;k<G.players.length;k++){
+    var pk=G.players[k];
+    setup.names.push(pk.label);
+    setup.teams.push(pk.team);
+    setup.looks.push([pk.cols.face.key,pk.cols.body.key,pk.cols.arms.key,pk.cols.legs.key,pk.cols.eyes.key]);
   }
   buildCards();
   for(var s in NET.dcs){
-    var copy=Object.assign({},setup,{you:parseInt(s.slice(1),10)});
+    if(NET.slotIdx[s]==null) continue;
+    var copy=Object.assign({},setup,{you:NET.slotIdx[s]});
     netSend(NET.dcs[s],{start:copy});
   }
   if(NET.tick) clearInterval(NET.tick);
@@ -3351,11 +3446,12 @@ function hostStartMatch(stage){
 function guestStart(setup){
   NET.started=true;
   var stage=STAGES[Math.max(0,Math.min(STAGES.length-1,setup.stage|0))];
-  startMatch({humans:1,total:setup.total,label:"FRIENDS",timed:setup.timed!==0},stage);
+  startMatch({humans:1,total:setup.total,label:"FRIENDS",timed:setup.timed!==0,team:setup.team===1},stage);
   for(var i=0;i<G.players.length;i++){
     var p=G.players[i];
     p.isAI=false;
     p.label=setup.names[i]||("P"+(i+1));
+    if(setup.teams&&setup.teams[i]!=null) p.team=setup.teams[i]|0;
     var lk=setup.looks&&setup.looks[i];
     if(lk){
       function byKey(k){ for(var z=0;z<BODY_COLORS.length;z++) if(BODY_COLORS[z].key===k) return BODY_COLORS[z]; return BODY_COLORS[0]; }
